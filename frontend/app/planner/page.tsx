@@ -1,31 +1,31 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { useEffect } from "react";
+import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
 
-const PlannerPage = () => {
-  const { data: session } = useSession();
+export default function PlannerPage() {
+  const { user, loading } = useUser();
 
-  useEffect(() => {
-    document.title = "ComsOS - Planner";
-  }, []);
-
-  if (!session) {
+  if (loading) return null;
+  if (!user) {
     return (
-      <div style={{ padding: "20px", fontFamily: "'Roboto', sans-serif" }}>
-        <h1>Sign in to access Planner</h1>
+      <div
+        style={{
+          padding: 32,
+          textAlign: "center",
+          fontFamily: "'Roboto', sans-serif",
+        }}
+      >
+        <h2>Sign in to access Planner</h2>
         <Link href="/">Return to homepage</Link>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: "20px", fontFamily: "'Roboto', sans-serif" }}>
+    <div style={{ padding: 32, fontFamily: "'Roboto', sans-serif" }}>
       <h1>Planner</h1>
-      <p>Manage your study schedule and track your upcoming tasks here.</p>
+      <p>Your planner will appear here.</p>
     </div>
   );
-};
-
-export default PlannerPage;
+}

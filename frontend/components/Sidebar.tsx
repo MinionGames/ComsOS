@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useUser } from "../lib/UserContext";
 
 const navLinkStyle = {
   color: "#fff",
@@ -6,8 +7,10 @@ const navLinkStyle = {
   fontWeight: 500,
   padding: "10px 18px",
   borderRadius: "6px",
-  transition: "background 0.18s, color 0.18s",
-  marginBottom: 2,
+  border: "2px solid #3b4252",
+  background: "transparent",
+  transition: "background 0.18s, color 0.18s, border 0.18s",
+  marginBottom: 6,
   display: "block",
 };
 
@@ -17,7 +20,9 @@ const navLinkActiveStyle = {
 };
 
 export default function Sidebar() {
-  // Optionally, you can highlight the active link using router.pathname
+  const { user, loading } = useUser();
+  if (loading || !user) return null;
+
   return (
     <aside
       style={{
@@ -37,12 +42,22 @@ export default function Sidebar() {
         boxShadow: "2px 0 8px 0 rgba(0,0,0,0.07)",
       }}
     >
+      <div
+        style={{
+          padding: "24px 18px 12px 18px",
+          fontWeight: 700,
+          fontSize: "1.2rem",
+          letterSpacing: 1,
+        }}
+      >
+        Workspace
+      </div>
       <nav
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 6,
-          padding: 18,
+          gap: 0,
+          padding: "0 18px",
         }}
       >
         <Link href="/dashboard" style={navLinkStyle}>
@@ -54,7 +69,7 @@ export default function Sidebar() {
         <Link href="/dashboard/notes" style={navLinkStyle}>
           Notes
         </Link>
-        <Link href="/dashboard/uploads" style={navLinkStyle}>
+        <Link href="/files" style={navLinkStyle}>
           Files
         </Link>
         <Link href="/study-mode" style={navLinkStyle}>
@@ -67,6 +82,18 @@ export default function Sidebar() {
           Settings
         </Link>
       </nav>
+      <div
+        style={{
+          padding: "24px 18px 12px 18px",
+          fontWeight: 700,
+          fontSize: "1.1rem",
+          letterSpacing: 1,
+          marginTop: 24,
+          borderTop: "1px solid #2c3e50",
+        }}
+      >
+        Subjects
+      </div>
     </aside>
   );
 }

@@ -4,16 +4,16 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { signOut } from "../lib/supabaseAuth";
+import { useUser } from "../lib/UserContext";
 
 const Navbar = () => {
-  const [user, setUser] = useState<any>(null);
+  const { user } = useUser();
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [dateTime, setDateTime] = useState(new Date());
   const [is24Hour, setIs24Hour] = useState(false);
   const [showSeconds, setShowSeconds] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
     const storedTheme = window.localStorage.getItem("comsos-theme");
     const stored24 = window.localStorage.getItem("comsos-clock-24hr");
     const storedSeconds = window.localStorage.getItem("comsos-show-seconds");
@@ -108,14 +108,15 @@ const Navbar = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          height: "56px",
-          padding: "0 20px",
-          position: "sticky",
+          padding: "0 32px",
+          height: 56,
+          position: "fixed",
           top: 0,
-          width: "100%",
-          boxSizing: "border-box",
+          left: 0,
+          right: 0,
           zIndex: 1000,
           fontFamily: "'Roboto', sans-serif",
+          boxShadow: "0 2px 8px 0 rgba(0,0,0,0.07)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
