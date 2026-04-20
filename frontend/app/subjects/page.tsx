@@ -1,34 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
-import { supabase } from "../../lib/supabaseClient";
-import { useSupabaseProfileSync } from "../../lib/useSupabaseProfileSync";
 
-const SubjectsPage = () => {
-  const [user, setUser] = useState<any>(null);
-  useSupabaseProfileSync();
+export default function SubjectsPage() {
+  const { user, loading } = useUser();
 
-  useEffect(() => {
-    document.title = "ComsOS - Subjects";
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
-  }, []);
-
+  if (loading) return null;
   if (!user) {
     return (
-      <div style={{ padding: "20px", fontFamily: "'Roboto', sans-serif" }}>
-        <h1>Please sign in to view subjects</h1>
+      <div
+        style={{
+          padding: 32,
+          textAlign: "center",
+          fontFamily: "'Roboto', sans-serif",
+        }}
+      >
+        <h2>Sign in to access Subjects</h2>
         <Link href="/">Return to homepage</Link>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: "20px", fontFamily: "'Roboto', sans-serif" }}>
+    <div style={{ padding: 32, fontFamily: "'Roboto', sans-serif" }}>
       <h1>Subjects</h1>
-      <p>Here you can view and manage your subjects.</p>
+      <p>Your subjects will appear here.</p>
     </div>
   );
-};
-
-export default SubjectsPage;
+}

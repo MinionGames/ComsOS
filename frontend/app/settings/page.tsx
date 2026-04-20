@@ -1,21 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseProfileSync } from "../../lib/useSupabaseProfileSync";
+import { useState, useEffect } from "react";
 
 const SettingsPage = () => {
-  const [user, setUser] = useState<any>(null);
-  useSupabaseProfileSync();
+  const { user, loading } = useUser();
+
+  if (loading) return null;
+  if (!user) {
+    return (
+      <div
+        style={{
+          padding: 32,
+          textAlign: "center",
+          fontFamily: "'Roboto', sans-serif",
+        }}
+      >
+        <h2>Sign in to access Settings</h2>
+        <Link href="/">Return to homepage</Link>
+      </div>
+    );
+  }
+
   const [is24Hour, setIs24Hour] = useState(false);
   const [showSeconds, setShowSeconds] = useState(true);
   const [initialIs24Hour, setInitialIs24Hour] = useState(false);
   const [initialShowSeconds, setInitialShowSeconds] = useState(true);
 
   useEffect(() => {
-    document.title = "ComsOS - Settings";
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
     const stored24 = window.localStorage.getItem("comsos-clock-24hr");
     const storedSeconds = window.localStorage.getItem("comsos-show-seconds");
 
@@ -45,17 +60,8 @@ const SettingsPage = () => {
     window.location.reload();
   };
 
-  if (!user) {
-    return (
-      <div style={{ padding: "20px", fontFamily: "'Roboto', sans-serif" }}>
-        <h1>Please sign in to access Settings</h1>
-        <Link href="/">Return to homepage</Link>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ padding: "20px", fontFamily: "'Roboto', sans-serif" }}>
+    <div style={{ padding: 32, fontFamily: "'Roboto', sans-serif" }}>
       <h1>Settings</h1>
       <p>Adjust your application and account preferences here.</p>
 

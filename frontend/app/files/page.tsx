@@ -1,17 +1,13 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { useEffect } from "react";
+import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
 
 const FilesPage = () => {
-  const { data: session } = useSession();
+  const { user, loading } = useUser();
 
-  useEffect(() => {
-    document.title = "ComsOS - Files";
-  }, []);
-
-  if (!session) {
+  if (loading) return null;
+  if (!user) {
     return (
       <div style={{ padding: "20px", fontFamily: "'Roboto', sans-serif" }}>
         <h1>Sign in to access Files</h1>
