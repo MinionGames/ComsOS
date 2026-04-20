@@ -3,32 +3,24 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../lib/supabaseClient";
+import { useUser } from "../lib/UserContext";
 import styles from "./page.module.css";
 
 const Page = () => {
   const router = useRouter();
-  useEffect(() => {
-    document.title = "ComsOS - Homepage";
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) router.push("/dashboard");
-    });
-  }, [router]);
+  const { user, loading } = useUser();
 
-  return (
-    <>
-      <h1 className={styles.title}>ComsOS</h1>
-      <div className={styles.welcome}>
-        <h1 className={styles.heading1}>You are not signed in</h1>
-        <a className={styles.button} href="/auth/login">
-          Sign in with Email
-        </a>
-        <div style={{ marginTop: 16 }}>
-          Don't have an account? <a href="/auth/signup">Sign up</a>
-        </div>
-      </div>
-    </>
-  );
+  useEffect(() => {
+    if (loading) return;
+    if (user) {
+      router.replace("/dashboard");
+    } else {
+      router.replace("/auth/login");
+    }
+  }, [user, loading, router]);
+
+  // Optionally, render nothing while redirecting
+  return null;
 };
 
 export default Page;

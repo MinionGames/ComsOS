@@ -6,6 +6,7 @@ import { signUpWithEmail } from "../../../lib/supabaseAuth";
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -26,7 +27,7 @@ export default function Signup() {
     e.preventDefault();
     setError("");
     setSuccess("");
-    const { error } = await signUpWithEmail(email, password);
+    const { error } = await signUpWithEmail(email, password, name);
     if (error) {
       setError(error.message);
     } else {
@@ -76,6 +77,24 @@ export default function Signup() {
           Sign up for ComsOS
         </h1>
         <form onSubmit={handleSubmit}>
+          <input
+            type="text"
+            placeholder="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            style={{
+              width: "100%",
+              marginBottom: 12,
+              padding: 10,
+              borderRadius: 6,
+              border: `1px solid ${inputBorder}`,
+              background: inputBg,
+              color: textColor,
+              fontFamily: "'Roboto', sans-serif",
+              transition: "background 0.2s, color 0.2s, border 0.2s",
+            }}
+          />
           <input
             type="email"
             placeholder="Email"

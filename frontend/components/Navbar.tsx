@@ -99,6 +99,8 @@ const Navbar = () => {
     return null; // Don't show navbar if not signed in
   }
 
+  const displayName = user.name || user.email?.split("@")[0] || "User";
+
   return (
     <>
       <header
@@ -119,22 +121,14 @@ const Navbar = () => {
           boxShadow: "0 2px 8px 0 rgba(0,0,0,0.07)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
-            <Link
-              href="/dashboard"
-              style={{ color: "white", textDecoration: "none" }}
-            >
-              ComsOS
-            </Link>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+          <div style={{ fontWeight: 700, fontSize: 20, marginRight: 24 }}>ComsOS</div>
           <div style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.7)" }}>
             {formatDateLabel(dateTime)} {formatTimeLabel(dateTime)}
           </div>
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ fontSize: "0.95rem" }}>Welcome, {user.email}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <span style={{ fontSize: "0.95rem", fontWeight: 500 }}>Welcome, {displayName}</span>
           <button
             onClick={toggleTheme}
             style={{
@@ -166,7 +160,7 @@ const Navbar = () => {
               fontFamily: "inherit",
             }}
           >
-            Sign out
+            Sign Out
           </button>
         </div>
       </header>

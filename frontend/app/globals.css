@@ -1,0 +1,31 @@
+/* Light mode variables */
+:root {
+  --cosmos-purple: #7f77dd;
+  --cosmos-purple-light: #eeedfe;
+  --cosmos-purple-mid: #534ab7;
+  --cosmos-purple-dark: #3c3489;
+
+  --sidebar-width: 220px;
+  --topbar-height: 48px;
+
+  --card-bg: #f5f5f3;
+  --card-text: #222;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --card-bg: #23232b;
+    --card-text: #f5f5f3;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans, system-ui, sans-serif);
+  background: var(--color-background-tertiary, #f5f5f3);
+  color: var(--color-text-primary);
+}
