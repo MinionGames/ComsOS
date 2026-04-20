@@ -1,22 +1,69 @@
-// filepath: /pages/index.tsx
-import { useSession, signIn, signOut } from "next-auth/react";
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { signInWithEmail } from "../../../lib/supabaseAuth";
 
-export default function Home() {
-  const { data: session } = useSession();
+export default function Login() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const router = useRouter();
 
-  if (!session) {
-    return (
-      <div>
-        <h1>You are not signed in</h1>
-        <button onClick={() => signIn("google")}>Sign in with Google</button>
-      </div>
-    );
-  }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    const { error } = await signInWithEmail(email, password);
+    if (error) {
+      setError(error.message);
+    } else {
+      router.push("/dashboard");
+    }
+  };
 
   return (
-    <div>
-      <h1>Welcome, {session.user?.name}</h1>
-      <button onClick={() => signOut()}>Sign out</button>
+    <div
+      style={{
+        maxWidth: 400,
+        margin: "40px auto",
+        fontFamily: "'Roboto', sans-serif",
+      }}
+    >
+      <h1>Sign in to ComsOS</h1>
+      <form onSubmit={handleSubmit}>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          style={{ width: "100%", marginBottom: 12, padding: 8 }}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          style={{ width: "100%", marginBottom: 12, padding: 8 }}
+        />
+        <button
+          type="submit"
+          style={{
+            width: "100%",
+            padding: 10,
+            background: "#0070f3",
+            color: "#fff",
+            border: "none",
+            borderRadius: 4,
+          }}
+        >
+          Sign In
+        </button>
+        {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
+      </form>
+      <div style={{ marginTop: 16 }}>
+        Don't have an account? <a href="/auth/signup">Sign up</a>
+      </div>
     </div>
   );
 }

@@ -1,7 +1,8 @@
 // filepath: /c:/Users/leyan/Documents/GitHub/ComsOS/frontend/app/layout.tsx
 "use client";
 
-import { SessionProvider } from "next-auth/react";
+import Navbar from "../components/Navbar";
+import Sidebar from "../components/Sidebar";
 
 export default function RootLayout({
   children,
@@ -10,8 +11,24 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
-        <SessionProvider>{children}</SessionProvider>
+      <body style={{ margin: 0, padding: 0, overflowX: "hidden" }}>
+        <Navbar />
+        <Sidebar />
+        <main
+          style={{
+            marginTop: "56px",
+            marginLeft: "220px",
+            minHeight: "100vh",
+            backgroundColor: "var(--main-bg, #f5f7fb)",
+            color: "var(--text-color, #121212)",
+            padding: "20px",
+            boxSizing: "border-box",
+            width: "calc(100% - 220px)",
+            maxWidth: "1200px",
+          }}
+        >
+          {children}
+        </main>
       </body>
     </html>
   );
