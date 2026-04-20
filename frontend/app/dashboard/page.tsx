@@ -33,8 +33,10 @@ export default function DashboardPage() {
 
   return (
     <div style={{ padding: 32, fontFamily: "'Roboto', sans-serif" }}>
-      <h1>Hello, {displayName}!</h1>
-      <p>Welcome to your dashboard.</p>
+      <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: 12 }}>Dashboard</h1>
+      <p style={{ fontSize: '1.1rem', color: '#aaa' }}>
+        Welcome to your dashboard. Here you can see an overview of your workspace and quick access to your main features.
+      </p>
     </div>
   );
 }
