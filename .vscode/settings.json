@@ -1,0 +1,22 @@
+{
+    "python.defaultInterpreterPath": "./backend/venv/Scripts/python.exe",
+    "python.terminal.activateEnvironment": true,
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "[python]": {
+      "editor.defaultFormatter": "charliermarsh.ruff"
+    },
+    "tailwindCSS.includeLanguages": {
+      "typescript": "javascript",
+      "typescriptreact": "javascript"
+    },
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/.next": true,
+      "**/node_modules": true,
+      "**/venv": true
+    },
+    "emmet.includeLanguages": {
+      "typescriptreact": "html"
+    }
+  }
