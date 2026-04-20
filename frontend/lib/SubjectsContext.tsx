@@ -38,9 +38,9 @@ export const SubjectsProvider = ({
     setLoadingSubjects(true);
     const { data } = await supabase
       .from("subjects")
-      .select("id, title, color")
+      .select("id, title, color, description, order")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+      .order("order", { ascending: true });
     setSubjects(data || []);
     setLoadingSubjects(false);
   }, []);
@@ -53,10 +53,7 @@ export const SubjectsProvider = ({
       setLoadingSubjects(false);
     }
     function onFocus() {
-      setLoadingSubjects(true);
-      if (user && user.id) {
-        reloadSubjects(user.id, supabase);
-      }
+      window.location.reload();
     }
     window.addEventListener("focus", onFocus);
     return () => {

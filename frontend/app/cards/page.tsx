@@ -4,6 +4,7 @@ import { useUser } from "../../lib/UserContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSubjects } from "../../lib/SubjectsContext";
 import { useDraggableList } from "./useDraggableList";
+import { useSearchParams } from "next/navigation";
 
 const CARD_TYPES = [
   { value: "task", label: "Task" },
@@ -118,17 +119,25 @@ export default function CardsPage() {
   const { handleDragStart, handleDragEnter, handleDragEnd, isDragging } =
     useDraggableList(cards, setCards, saveOrderToDatabase);
 
-  // Filtered cards based on search
+  // Get subject filter from URL
+  const searchParams = useSearchParams();
+  const subjectFilter = searchParams.get("subject") || "";
+
+  // Filtered cards based on search and subject
   const filteredCards = useMemo(() => {
-    if (!search.trim()) return cards;
+    let filtered = cards;
+    if (subjectFilter) {
+      filtered = filtered.filter((card) => card.subject_id === subjectFilter);
+    }
+    if (!search.trim()) return filtered;
     const lower = search.toLowerCase();
-    return cards.filter(
+    return filtered.filter(
       (card) =>
         (card.title && card.title.toLowerCase().includes(lower)) ||
         (card.type && card.type.toLowerCase().includes(lower)) ||
         (card.content && card.content.toLowerCase().includes(lower)),
     );
-  }, [cards, search]);
+  }, [cards, search, subjectFilter]);
 
   return (
     <div style={{ padding: 32, position: "relative" }}>
