@@ -2,18 +2,9 @@
 
 import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
-import { useEffect } from "react";
 
-export default function DashboardPage() {
+export default function PlannerPage() {
   const { user, loading } = useUser();
-
-  const displayName = user?.name || user?.email?.split("@")[0] || "User";
-
-  useEffect(() => {
-    if (user) {
-      document.title = `Hello, ${displayName}! | ComsOS`;
-    }
-  }, [user, displayName]);
 
   if (loading) return null;
   if (!user) {
@@ -25,7 +16,7 @@ export default function DashboardPage() {
           fontFamily: "'Roboto', sans-serif",
         }}
       >
-        <h2>Sign in to access Dashboard</h2>
+        <h2>Sign in to access Planner</h2>
         <Link href="/">Return to homepage</Link>
       </div>
     );
@@ -33,8 +24,8 @@ export default function DashboardPage() {
 
   return (
     <div style={{ padding: 32, fontFamily: "'Roboto', sans-serif" }}>
-      <h1>Hello, {displayName}!</h1>
-      <p>Welcome to your dashboard.</p>
+      <h1>Planner</h1>
+      <p>Your planner will appear here.</p>
     </div>
   );
 }
