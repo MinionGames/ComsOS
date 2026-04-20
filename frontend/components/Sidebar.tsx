@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { useUser } from "../lib/UserContext";
+import { SidebarSubjectsList } from "./SidebarSubjectsList";
 
 const navLinkStyle = {
   color: "#fff",
@@ -100,7 +101,7 @@ export default function Sidebar() {
         }}
       >
         {/* Subject list with color dots */}
-        {require("./SidebarSubjectsList").SidebarSubjectsList()}
+        <SidebarSubjectsList />
       </div>
     </aside>
   );
