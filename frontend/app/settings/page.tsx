@@ -61,9 +61,11 @@ const SettingsPage = () => {
   };
 
   return (
-    <div style={{ padding: 32, fontFamily: "'Roboto', sans-serif" }}>
-      <h1>Settings</h1>
-      <p>Adjust your application and account preferences here.</p>
+    <div style={{ padding: 32 }}>
+      <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: 12 }}>Settings</h1>
+      <p style={{ fontSize: '1.1rem', color: '#aaa' }}>
+        Manage your account and workspace settings here.
+      </p>
 
       <section style={{ marginTop: "24px", maxWidth: "600px" }}>
         <h2 style={{ marginBottom: "12px" }}>Clock Settings</h2>

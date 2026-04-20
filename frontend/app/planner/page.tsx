@@ -23,9 +23,11 @@ export default function PlannerPage() {
   }
 
   return (
-    <div style={{ padding: 32, fontFamily: "'Roboto', sans-serif" }}>
-      <h1>Planner</h1>
-      <p>Your planner will appear here.</p>
+    <div style={{ padding: 32 }}>
+      <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: 12 }}>Planner</h1>
+      <p style={{ fontSize: '1.1rem', color: '#aaa' }}>
+        Your planner will appear here. Plan and organize your study schedule and tasks.
+      </p>
     </div>
   );
 }
