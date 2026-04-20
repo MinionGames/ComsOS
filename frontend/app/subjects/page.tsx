@@ -17,7 +17,13 @@ export default function SubjectsPage() {
   // Removed local subjects and loadingSubjects state, using context instead
 
   // Only load subjects on first mount and after creation
-  const { subjects, loadingSubjects, reloadSubjects } = useSubjects();
+  const {
+    subjects,
+    loadingSubjects,
+    reloadSubjects,
+    focusReloadNeeded,
+    setFocusReloadNeeded,
+  } = useSubjects();
 
   // On first mount, load subjects if not already loaded
   React.useEffect(() => {
@@ -30,14 +36,13 @@ export default function SubjectsPage() {
   if (loading) return null;
   if (!user) {
     return (
-      <div
-        style={{
-          padding: 32,
-          textAlign: "center",
-          fontFamily: "'Roboto', sans-serif",
-        }}
-      >
-        <h2>Sign in to access Subjects</h2>
+      <div style={{ padding: 32, textAlign: "center" }}>
+        <h1 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: 12 }}>
+          Sign in to access Subjects
+        </h1>
+        <p style={{ fontSize: "1.1rem", color: "#aaa" }}>
+          Please sign in to view and manage your subjects.
+        </p>
         <Link href="/">Return to homepage</Link>
       </div>
     );
@@ -70,9 +75,14 @@ export default function SubjectsPage() {
   };
 
   return (
-    <div style={{ padding: 32, fontFamily: "'Roboto', sans-serif" }}>
-      <h1>Subjects</h1>
-      <p>Your subjects will appear here.</p>
+    <div style={{ padding: 32 }}>
+      <h1 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: 12 }}>
+        Subjects
+      </h1>
+      <p style={{ fontSize: "1.1rem", color: "#aaa", marginBottom: 24 }}>
+        Manage your subjects here. Create, edit, and organize your study
+        subjects below.
+      </p>
       <div
         style={{
           display: "grid",
@@ -81,10 +91,31 @@ export default function SubjectsPage() {
           marginTop: 32,
         }}
       >
-        {/* Subject Cards */}
         {loadingSubjects ? (
-          <div style={{ gridColumn: "1/-1", textAlign: "center" }}>
-            Loading...
+          <div
+            style={{
+              gridColumn: "1/-1",
+              textAlign: "center",
+              minHeight: 80,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+            }}
+          >
+            <span
+              style={{
+                width: 24,
+                height: 24,
+                border: "3px solid #6366f1",
+                borderTop: "3px solid transparent",
+                borderRadius: "50%",
+                display: "inline-block",
+                animation: "spin 1s linear infinite",
+              }}
+            />
+            <span>Loading subjects...</span>
+            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
           </div>
         ) : (
           <>
@@ -167,9 +198,22 @@ export default function SubjectsPage() {
                   marginBottom: 0,
                 }}
               />
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%" }}>
-                <span style={{ fontSize: 32, color: "#bbb", marginBottom: 8 }}>+</span>
-                <span style={{ fontWeight: 600, color: "#888" }}>Create Subject</span>
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "100%",
+                }}
+              >
+                <span style={{ fontSize: 32, color: "#bbb", marginBottom: 8 }}>
+                  +
+                </span>
+                <span style={{ fontWeight: 600, color: "#888" }}>
+                  Create Subject
+                </span>
               </div>
             </div>
           </>

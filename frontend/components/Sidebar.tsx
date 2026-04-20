@@ -66,11 +66,8 @@ export default function Sidebar() {
         <Link href="/subjects" style={navLinkStyle}>
           Subjects
         </Link>
-        <Link href="/dashboard/notes" style={navLinkStyle}>
-          Notes
-        </Link>
-        <Link href="/files" style={navLinkStyle}>
-          Files
+        <Link href="/cards" style={navLinkStyle}>
+          Cards
         </Link>
         <Link href="/study-mode" style={navLinkStyle}>
           Study Mode
@@ -93,6 +90,17 @@ export default function Sidebar() {
         }}
       >
         Subjects
+      </div>
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          maxHeight: "calc(100vh - 420px)",
+          padding: "0 12px 0 12px",
+        }}
+      >
+        {/* Subject list with color dots */}
+        {require("./SidebarSubjectsList").SidebarSubjectsList()}
       </div>
     </aside>
   );

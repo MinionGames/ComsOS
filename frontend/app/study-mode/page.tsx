@@ -17,11 +17,10 @@ const StudyModePage = () => {
   }
 
   return (
-    <div style={{ padding: "20px", fontFamily: "'Roboto', sans-serif" }}>
-      <h1>Study Mode</h1>
-      <p>
-        Use this page to focus on your learning sessions and review your
-        material.
+    <div style={{ padding: 32 }}>
+      <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: 12 }}>Study Mode</h1>
+      <p style={{ fontSize: '1.1rem', color: '#aaa' }}>
+        Use this page to focus on your learning sessions and review your material.
       </p>
     </div>
   );
