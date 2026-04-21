@@ -5,6 +5,7 @@ interface Subject {
   id: string;
   title: string;
   color: string;
+  description?: string;
 }
 
 interface SubjectsContextType {

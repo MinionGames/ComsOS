@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
+
+// ...existing code...
 import { useUser } from "../../lib/UserContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSubjects } from "../../lib/SubjectsContext";
@@ -27,6 +29,17 @@ export default function CardsPage() {
   const [cardType, setCardType] = useState(CARD_TYPES[0].value);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+
+  // Card edit modal state
+  const [editModal, setEditModal] = useState<null | any>(null);
+  const [editName, setEditName] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editSubject, setEditSubject] = useState("");
+  const [editMastery, setEditMastery] = useState(0);
+  const [editLastReviewed, setEditLastReviewed] = useState("");
+  const [editNextReview, setEditNextReview] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState("");
 
   // Fetch cards function for reuse
   async function fetchCards() {
@@ -253,6 +266,7 @@ export default function CardsPage() {
                     opacity: isDragging ? 0.7 : 1,
                     cursor: "move",
                     transition: "background 0.15s, opacity 0.15s",
+                    position: "relative",
                   }}
                 >
                   <div
@@ -278,6 +292,41 @@ export default function CardsPage() {
                     >
                       {card.type?.charAt(0).toUpperCase() + card.type?.slice(1)}
                     </span>
+                    <button
+                      style={{
+                        position: "absolute",
+                        top: 12,
+                        right: 12,
+                        background: "#6366f1",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 6,
+                        padding: "2px 10px",
+                        fontSize: 13,
+                        cursor: "pointer",
+                      }}
+                      title="Edit Card"
+                      onClick={() => {
+                        setEditModal(card);
+                        setEditName(card.title);
+                        setEditContent(card.content || "");
+                        setEditSubject(card.subject_id || "");
+                        setEditMastery(card.mastery_level ?? 0);
+                        setEditLastReviewed(
+                          card.last_reviewed_at
+                            ? card.last_reviewed_at.slice(0, 16)
+                            : "",
+                        );
+                        setEditNextReview(
+                          card.next_review_at
+                            ? card.next_review_at.slice(0, 16)
+                            : "",
+                        );
+                        setEditError("");
+                      }}
+                    >
+                      ✏️ Edit
+                    </button>
                   </div>
                   {card.content && (
                     <div style={{ color: "#aaa", fontSize: 15 }}>
@@ -289,6 +338,299 @@ export default function CardsPage() {
                   </div>
                 </li>
               ))}
+              {/* Card edit modal */}
+              {editModal && (
+                <div
+                  style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    width: "100vw",
+                    height: "100vh",
+                    background: "rgba(0,0,0,0.3)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 1000,
+                  }}
+                  onClick={() => setEditModal(null)}
+                >
+                  <div
+                    style={{
+                      background: "#222a34",
+                      padding: 32,
+                      borderRadius: 12,
+                      minWidth: 340,
+                      color: "#fff",
+                      boxShadow: "0 4px 24px 0 rgba(0,0,0,0.18)",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <h2 style={{ marginBottom: 16 }}>Edit Card</h2>
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!editName.trim()) {
+                          setEditError("Card name is required.");
+                          return;
+                        }
+                        setEditing(true);
+                        setEditError("");
+                        // Validate mastery_level
+                        if (editMastery < 0 || editMastery > 1) {
+                          setEditError(
+                            "Mastery level must be between 0 and 1.",
+                          );
+                          setEditing(false);
+                          return;
+                        }
+                        const { error: updateError } = await supabase
+                          .from("cards")
+                          .update({
+                            title: editName,
+                            content: editContent,
+                            subject_id: editSubject || null,
+                            mastery_level: editMastery,
+                            last_reviewed_at: editLastReviewed
+                              ? new Date(editLastReviewed).toISOString()
+                              : null,
+                            next_review_at: editNextReview
+                              ? new Date(editNextReview).toISOString()
+                              : null,
+                          })
+                          .eq("id", editModal.id);
+                        setEditing(false);
+                        if (updateError) {
+                          setEditError(
+                            updateError.message || "Failed to update card.",
+                          );
+                          return;
+                        }
+                        setEditModal(null);
+                        // Refresh cards
+                        setLoading(true);
+                        const { data } = await supabase
+                          .from("cards")
+                          .select(
+                            "id, title, content, created_at, subject_id, order, mastery_level, last_reviewed_at, next_review_at",
+                          )
+                          .eq("user_id", user.id)
+                          .order("order", { ascending: true });
+                        setCards(data || []);
+                        setLoading(false);
+                      }}
+                    >
+                      <div style={{ marginBottom: 18 }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: 6,
+                            fontWeight: 500,
+                          }}
+                        >
+                          Card Name
+                        </label>
+                        <input
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            borderRadius: 6,
+                            border: "1px solid #6366f1",
+                            fontSize: 15,
+                            marginBottom: 4,
+                          }}
+                          placeholder="Enter card name"
+                          disabled={editing}
+                          autoFocus
+                        />
+                      </div>
+                      <div style={{ marginBottom: 18 }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: 6,
+                            fontWeight: 500,
+                          }}
+                        >
+                          Card Content
+                        </label>
+                        <textarea
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            borderRadius: 6,
+                            border: "1px solid #6366f1",
+                            fontSize: 15,
+                            marginBottom: 4,
+                            minHeight: 60,
+                          }}
+                          placeholder="Enter card content"
+                          disabled={editing}
+                        />
+                      </div>
+                      <div style={{ marginBottom: 18 }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: 6,
+                            fontWeight: 500,
+                          }}
+                        >
+                          Subject
+                        </label>
+                        <select
+                          value={editSubject}
+                          onChange={(e) => setEditSubject(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            borderRadius: 6,
+                            border: "1px solid #6366f1",
+                            fontSize: 15,
+                          }}
+                          disabled={editing || loadingSubjects}
+                        >
+                          <option value="">No subject</option>
+                          {subjects.map((subj) => (
+                            <option key={subj.id} value={subj.id}>
+                              {subj.title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={{ marginBottom: 18 }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: 6,
+                            fontWeight: 500,
+                          }}
+                        >
+                          Mastery Level (0–1)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={editMastery}
+                          onChange={(e) =>
+                            setEditMastery(Number(e.target.value))
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            borderRadius: 6,
+                            border: "1px solid #6366f1",
+                            fontSize: 15,
+                            marginBottom: 4,
+                          }}
+                          disabled={editing}
+                        />
+                      </div>
+                      <div style={{ marginBottom: 18 }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: 6,
+                            fontWeight: 500,
+                          }}
+                        >
+                          Last Reviewed At
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={editLastReviewed}
+                          onChange={(e) => setEditLastReviewed(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            borderRadius: 6,
+                            border: "1px solid #6366f1",
+                            fontSize: 15,
+                            marginBottom: 4,
+                          }}
+                          disabled={editing}
+                        />
+                      </div>
+                      <div style={{ marginBottom: 18 }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: 6,
+                            fontWeight: 500,
+                          }}
+                        >
+                          Next Review At
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={editNextReview}
+                          onChange={(e) => setEditNextReview(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            borderRadius: 6,
+                            border: "1px solid #6366f1",
+                            fontSize: 15,
+                            marginBottom: 4,
+                          }}
+                          disabled={editing}
+                        />
+                      </div>
+                      {editError && (
+                        <div style={{ color: "#f77", marginBottom: 10 }}>
+                          {editError}
+                        </div>
+                      )}
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          gap: 12,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          style={{
+                            background: "#444c5e",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: 6,
+                            padding: "8px 18px",
+                            fontWeight: 500,
+                            cursor: "pointer",
+                          }}
+                          onClick={() => setEditModal(null)}
+                          disabled={editing}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          style={{
+                            background: "#6366f1",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: 6,
+                            padding: "8px 18px",
+                            fontWeight: 500,
+                            cursor: "pointer",
+                          }}
+                          disabled={editing}
+                        >
+                          {editing ? "Saving..." : "Save"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </ul>
           )}
         </div>
