@@ -101,6 +101,38 @@ export default function SubjectsPage() {
     );
   }
 
+  // Handle subject creation
+  async function handleCreateSubject(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user) return;
+    setCreating(true);
+    setError("");
+    setSuccess("");
+    try {
+      const { data, error } = await supabase
+        .from("subjects")
+        .insert([
+          {
+            user_id: user.id,
+            title: subjectName,
+            color: subjectColor,
+            description: subjectDescription,
+          },
+        ])
+        .select();
+      if (error) throw error;
+      setSuccess("Subject created!");
+      setSubjectName("");
+      setSubjectColor("#6366f1");
+      setSubjectDescription("");
+      setShowModal(false);
+      if (reloadSubjects) await reloadSubjects(user.id, supabase);
+    } catch (err: any) {
+      setError(err.message || "Failed to create subject");
+    } finally {
+      setCreating(false);
+    }
+  }
   return (
     <div style={{ padding: 32 }}>
       <h1 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: 12 }}>
