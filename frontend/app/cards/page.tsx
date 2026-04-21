@@ -26,7 +26,7 @@ export default function CardsPage() {
 
   // Card creation state
   const [cardName, setCardName] = useState("");
-  const [cardType, setCardType] = useState(CARD_TYPES[0].value);
+  const [cardContent, setCardContent] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
@@ -38,8 +38,39 @@ export default function CardsPage() {
   const [editMastery, setEditMastery] = useState(0);
   const [editLastReviewed, setEditLastReviewed] = useState("");
   const [editNextReview, setEditNextReview] = useState("");
+  const [cardTimeFormat, setCardTimeFormat] = useState("relative");
   const [editing, setEditing] = useState(false);
   const [editError, setEditError] = useState("");
+
+  // load card time format preference from localStorage
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("comsos-cards-time-format");
+      if (stored === "absolute" || stored === "relative") {
+        setCardTimeFormat(stored);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  function formatDate(dateStr: string) {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return dateStr;
+    if (cardTimeFormat === "absolute") return d.toLocaleString();
+    const diff = Date.now() - d.getTime();
+    const abs = Math.abs(diff);
+    const s = Math.floor(abs / 1000);
+    const m = Math.floor(s / 60);
+    const h = Math.floor(m / 60);
+    const day = Math.floor(h / 24);
+    if (s < 60) return diff >= 0 ? `${s} seconds ago` : `in ${s} seconds`;
+    if (m < 60) return diff >= 0 ? `${m} minutes ago` : `in ${m} minutes`;
+    if (h < 24) return diff >= 0 ? `${h} hours ago` : `in ${h} hours`;
+    if (day < 30) return diff >= 0 ? `${day} days ago` : `in ${day} days`;
+    return d.toLocaleString();
+  }
 
   // Fetch cards function for reuse
   async function fetchCards() {
@@ -52,7 +83,7 @@ export default function CardsPage() {
     const { data, error } = await supabase
       .from("cards")
       .select(
-        "id, title, type, content, file_url, due_date, created_at, subject_id, order",
+        "id, title, type, content, file_url, due_date, created_at, subject_id, order, mastery_level, last_reviewed_at, next_review_at",
       )
       .eq("user_id", user.id)
       .order("order", { ascending: true });
@@ -89,9 +120,8 @@ export default function CardsPage() {
       {
         user_id: user.id,
         title: cardName,
-        type: cardType,
+        content: cardContent,
         subject_id: selectedSubject || null,
-        // Optionally add: content, file_url, due_date
       },
     ]);
     setCreating(false);
@@ -101,14 +131,14 @@ export default function CardsPage() {
     }
     setShowModal(false);
     setCardName("");
-    setCardType(CARD_TYPES[0].value);
+    setCardContent("");
     setSelectedSubject("");
     // Refresh cards
     setLoading(true);
     const { data } = await supabase
       .from("cards")
       .select(
-        "id, title, type, content, file_url, due_date, created_at, subject_id, order",
+        "id, title, type, content, file_url, due_date, created_at, subject_id, order, mastery_level, last_reviewed_at, next_review_at",
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
@@ -127,6 +157,40 @@ export default function CardsPage() {
           .eq("id", card.id),
       ),
     );
+  }
+
+  // Mark the currently-open card as reviewed (sets last_reviewed_at to now)
+  async function handleMarkReviewed() {
+    if (!editModal) return;
+    setEditing(true);
+    setEditError("");
+    try {
+      const now = new Date().toISOString();
+      const { error: markError } = await supabase
+        .from("cards")
+        .update({ last_reviewed_at: now })
+        .eq("id", editModal.id);
+      if (markError) {
+        setEditError(markError.message || "Failed to mark reviewed.");
+        return;
+      }
+      // update local state and refresh list
+      setEditLastReviewed(now);
+      setLoading(true);
+      const { data } = await supabase
+        .from("cards")
+        .select(
+          "id, title, content, created_at, subject_id, order, mastery_level, last_reviewed_at, next_review_at",
+        )
+        .eq("user_id", user.id)
+        .order("order", { ascending: true });
+      setCards(data || []);
+      setLoading(false);
+    } catch (err: any) {
+      setEditError(err?.message || String(err));
+    } finally {
+      setEditing(false);
+    }
   }
 
   const { handleDragStart, handleDragEnter, handleDragEnd, isDragging } =
@@ -275,23 +339,10 @@ export default function CardsPage() {
                     <span
                       style={{ color: "#aaa", fontSize: 13, marginRight: 8 }}
                     >
-                      {card.order ?? idx + 1}.
+                      {Number.isFinite(card.order) ? card.order : idx + 1}.
                     </span>
                     {card.title}
-                    <span
-                      style={{
-                        marginLeft: 12,
-                        background: "#6366f1",
-                        color: "#fff",
-                        borderRadius: 6,
-                        fontSize: 13,
-                        padding: "2px 10px",
-                        fontWeight: 500,
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      {card.type?.charAt(0).toUpperCase() + card.type?.slice(1)}
-                    </span>
+                    {/* type badge removed */}
                     <button
                       style={{
                         position: "absolute",
@@ -312,11 +363,9 @@ export default function CardsPage() {
                         setEditContent(card.content || "");
                         setEditSubject(card.subject_id || "");
                         setEditMastery(card.mastery_level ?? 0);
-                        setEditLastReviewed(
-                          card.last_reviewed_at
-                            ? card.last_reviewed_at.slice(0, 16)
-                            : "",
-                        );
+                        // keep full ISO for last reviewed so display helper can format it
+                        setEditLastReviewed(card.last_reviewed_at || "");
+                        // keep datetime-local format for next review input
                         setEditNextReview(
                           card.next_review_at
                             ? card.next_review_at.slice(0, 16)
@@ -333,8 +382,45 @@ export default function CardsPage() {
                       {card.content}
                     </div>
                   )}
-                  <div style={{ color: "#888", fontSize: 12, marginTop: 8 }}>
-                    Created: {new Date(card.created_at).toLocaleString()}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginTop: 8,
+                    }}
+                  >
+                    <div style={{ flex: 1, marginRight: 12 }}>
+                      <div
+                        style={{
+                          height: 10,
+                          background: "#1f2430",
+                          borderRadius: 6,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${Math.round((card.mastery_level ?? 0) * 100)}%`,
+                            background: "#6366f1",
+                            transition: "width 0.25s ease",
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        minWidth: 140,
+                        textAlign: "right",
+                        color: "#888",
+                        fontSize: 12,
+                      }}
+                    >
+                      {card.last_reviewed_at
+                        ? formatDate(card.last_reviewed_at)
+                        : "Never reviewed"}
+                    </div>
                   </div>
                 </li>
               ))}
@@ -360,7 +446,8 @@ export default function CardsPage() {
                       background: "#222a34",
                       padding: 32,
                       borderRadius: 12,
-                      minWidth: 340,
+                      minWidth: 760,
+                      maxWidth: 1100,
                       color: "#fff",
                       boxShadow: "0 4px 24px 0 rgba(0,0,0,0.18)",
                     }}
@@ -368,6 +455,7 @@ export default function CardsPage() {
                   >
                     <h2 style={{ marginBottom: 16 }}>Edit Card</h2>
                     <form
+                      style={{ width: "100%" }}
                       onSubmit={async (e) => {
                         e.preventDefault();
                         if (!editName.trim()) {
@@ -420,168 +508,216 @@ export default function CardsPage() {
                         setLoading(false);
                       }}
                     >
-                      <div style={{ marginBottom: 18 }}>
-                        <label
-                          style={{
-                            display: "block",
-                            marginBottom: 6,
-                            fontWeight: 500,
-                          }}
-                        >
-                          Card Name
-                        </label>
-                        <input
-                          type="text"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            borderRadius: 6,
-                            border: "1px solid #6366f1",
-                            fontSize: 15,
-                            marginBottom: 4,
-                          }}
-                          placeholder="Enter card name"
-                          disabled={editing}
-                          autoFocus
-                        />
-                      </div>
-                      <div style={{ marginBottom: 18 }}>
-                        <label
-                          style={{
-                            display: "block",
-                            marginBottom: 6,
-                            fontWeight: 500,
-                          }}
-                        >
-                          Card Content
-                        </label>
-                        <textarea
-                          value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            borderRadius: 6,
-                            border: "1px solid #6366f1",
-                            fontSize: 15,
-                            marginBottom: 4,
-                            minHeight: 60,
-                          }}
-                          placeholder="Enter card content"
-                          disabled={editing}
-                        />
-                      </div>
-                      <div style={{ marginBottom: 18 }}>
-                        <label
-                          style={{
-                            display: "block",
-                            marginBottom: 6,
-                            fontWeight: 500,
-                          }}
-                        >
-                          Subject
-                        </label>
-                        <select
-                          value={editSubject}
-                          onChange={(e) => setEditSubject(e.target.value)}
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            borderRadius: 6,
-                            border: "1px solid #6366f1",
-                            fontSize: 15,
-                          }}
-                          disabled={editing || loadingSubjects}
-                        >
-                          <option value="">No subject</option>
-                          {subjects.map((subj) => (
-                            <option key={subj.id} value={subj.id}>
-                              {subj.title}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div style={{ marginBottom: 18 }}>
-                        <label
-                          style={{
-                            display: "block",
-                            marginBottom: 6,
-                            fontWeight: 500,
-                          }}
-                        >
-                          Mastery Level (0–1)
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          value={editMastery}
-                          onChange={(e) =>
-                            setEditMastery(Number(e.target.value))
-                          }
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            borderRadius: 6,
-                            border: "1px solid #6366f1",
-                            fontSize: 15,
-                            marginBottom: 4,
-                          }}
-                          disabled={editing}
-                        />
-                      </div>
-                      <div style={{ marginBottom: 18 }}>
-                        <label
-                          style={{
-                            display: "block",
-                            marginBottom: 6,
-                            fontWeight: 500,
-                          }}
-                        >
-                          Last Reviewed At
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={editLastReviewed}
-                          onChange={(e) => setEditLastReviewed(e.target.value)}
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            borderRadius: 6,
-                            border: "1px solid #6366f1",
-                            fontSize: 15,
-                            marginBottom: 4,
-                          }}
-                          disabled={editing}
-                        />
-                      </div>
-                      <div style={{ marginBottom: 18 }}>
-                        <label
-                          style={{
-                            display: "block",
-                            marginBottom: 6,
-                            fontWeight: 500,
-                          }}
-                        >
-                          Next Review At
-                        </label>
-                        <input
-                          type="datetime-local"
-                          value={editNextReview}
-                          onChange={(e) => setEditNextReview(e.target.value)}
-                          style={{
-                            width: "100%",
-                            padding: "8px 10px",
-                            borderRadius: 6,
-                            border: "1px solid #6366f1",
-                            fontSize: 15,
-                            marginBottom: 4,
-                          }}
-                          disabled={editing}
-                        />
+                      {/* Removed duplicate Card Name field above the two-column layout */}
+                      <div style={{ display: "flex", gap: 32 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ marginBottom: 18 }}>
+                            <label
+                              style={{
+                                display: "block",
+                                marginBottom: 6,
+                                fontWeight: 500,
+                              }}
+                            >
+                              Card Name
+                            </label>
+                            <input
+                              type="text"
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              style={{
+                                width: "100%",
+                                padding: "8px 10px",
+                                borderRadius: 6,
+                                border: "1px solid #6366f1",
+                                fontSize: 15,
+                                marginBottom: 4,
+                                background: "var(--main-bg, #f5f7fb)",
+                                color: "var(--text-color, #121212)",
+                                fontFamily: "inherit",
+                                outline: "none",
+                              }}
+                              placeholder="Enter card name"
+                              disabled={editing}
+                              autoFocus
+                            />
+                          </div>
+                          <div style={{ marginBottom: 18 }}>
+                            <label
+                              style={{
+                                display: "block",
+                                marginBottom: 6,
+                                fontWeight: 500,
+                              }}
+                            >
+                              Subject
+                            </label>
+                            <select
+                              value={editSubject}
+                              onChange={(e) => setEditSubject(e.target.value)}
+                              style={{
+                                width: "100%",
+                                padding: "8px 10px",
+                                borderRadius: 6,
+                                border: "1px solid #6366f1",
+                                fontSize: 15,
+                                background: "var(--main-bg, #f5f7fb)",
+                                color: "var(--text-color, #121212)",
+                                fontFamily: "inherit",
+                                outline: "none",
+                              }}
+                              disabled={editing || loadingSubjects}
+                            >
+                              <option value="">No subject</option>
+                              {subjects.map((subj) => (
+                                <option key={subj.id} value={subj.id}>
+                                  {subj.title}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div style={{ marginBottom: 18 }}>
+                            <label
+                              style={{
+                                display: "block",
+                                marginBottom: 6,
+                                fontWeight: 500,
+                              }}
+                            >
+                              Mastery Level
+                            </label>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 10,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  flex: 1,
+                                  height: 12,
+                                  background: "#1f2430",
+                                  borderRadius: 6,
+                                  overflow: "hidden",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    height: "100%",
+                                    width: `${Math.round((editMastery ?? 0) * 100)}%`,
+                                    background: "#6366f1",
+                                    transition: "width 0.25s ease",
+                                  }}
+                                />
+                              </div>
+                              <div
+                                style={{
+                                  minWidth: 48,
+                                  textAlign: "right",
+                                  color: "#ddd",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {Math.round((editMastery ?? 0) * 100)}%
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ marginBottom: 18 }}>
+                            <label
+                              style={{
+                                display: "block",
+                                marginBottom: 6,
+                                fontWeight: 500,
+                              }}
+                            >
+                              Last Reviewed At
+                            </label>
+                            <div
+                              style={{
+                                width: "100%",
+                                padding: "8px 10px",
+                                borderRadius: 6,
+                                border: "1px solid #2f3646",
+                                background: "#14181f",
+                                color: "#ddd",
+                                fontSize: 14,
+                                marginBottom: 4,
+                                minHeight: 40,
+                                display: "flex",
+                                alignItems: "center",
+                              }}
+                            >
+                              {editLastReviewed
+                                ? formatDate(editLastReviewed)
+                                : "Never reviewed"}
+                            </div>
+                          </div>
+                          <div style={{ marginBottom: 18 }}>
+                            <label
+                              style={{
+                                display: "block",
+                                marginBottom: 6,
+                                fontWeight: 500,
+                              }}
+                            >
+                              Next Review At
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={editNextReview}
+                              onChange={(e) =>
+                                setEditNextReview(e.target.value)
+                              }
+                              style={{
+                                width: "100%",
+                                padding: "8px 10px",
+                                borderRadius: 6,
+                                border: "1px solid #6366f1",
+                                fontSize: 15,
+                                marginBottom: 4,
+                                background: "var(--main-bg, #f5f7fb)",
+                                color: "var(--text-color, #121212)",
+                                fontFamily: "inherit",
+                                outline: "none",
+                              }}
+                              disabled={editing}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ flex: 2, minWidth: 0 }}>
+                          <div style={{ marginBottom: 18, height: "100%" }}>
+                            <label
+                              style={{
+                                display: "block",
+                                marginBottom: 6,
+                                fontWeight: 500,
+                              }}
+                            >
+                              Card Content
+                            </label>
+                            <textarea
+                              value={editContent}
+                              onChange={(e) => setEditContent(e.target.value)}
+                              style={{
+                                width: "100%",
+                                padding: "12px 12px",
+                                borderRadius: 8,
+                                border: "1px solid #6366f1",
+                                fontSize: 15,
+                                minHeight: 320,
+                                resize: "vertical",
+                                fontFamily: "inherit",
+                                background: "var(--main-bg, #f5f7fb)",
+                                color: "var(--text-color, #121212)",
+                                lineHeight: 1.6,
+                                outline: "none",
+                              }}
+                              placeholder="Enter card content"
+                              disabled={editing}
+                            />
+                          </div>
+                        </div>
                       </div>
                       {editError && (
                         <div style={{ color: "#f77", marginBottom: 10 }}>
@@ -591,41 +727,68 @@ export default function CardsPage() {
                       <div
                         style={{
                           display: "flex",
-                          justifyContent: "flex-end",
+                          justifyContent: "space-between",
+                          alignItems: "center",
                           gap: 12,
+                          marginTop: 8,
                         }}
                       >
-                        <button
-                          type="button"
-                          style={{
-                            background: "#444c5e",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: 6,
-                            padding: "8px 18px",
-                            fontWeight: 500,
-                            cursor: "pointer",
-                          }}
-                          onClick={() => setEditModal(null)}
-                          disabled={editing}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          style={{
-                            background: "#6366f1",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: 6,
-                            padding: "8px 18px",
-                            fontWeight: 500,
-                            cursor: "pointer",
-                          }}
-                          disabled={editing}
-                        >
-                          {editing ? "Saving..." : "Save"}
-                        </button>
+                        <div style={{ color: "#888", fontSize: 12 }}>
+                          {editModal?.created_at ? (
+                            <span>
+                              Created: {formatDate(editModal.created_at)}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div style={{ display: "flex", gap: 12 }}>
+                          <button
+                            type="button"
+                            onClick={handleMarkReviewed}
+                            style={{
+                              background: "#16a34a",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: 6,
+                              padding: "8px 18px",
+                              fontWeight: 500,
+                              cursor: "pointer",
+                            }}
+                            disabled={editing}
+                          >
+                            Mark Reviewed
+                          </button>
+                          <button
+                            type="button"
+                            style={{
+                              background: "#444c5e",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: 6,
+                              padding: "8px 18px",
+                              fontWeight: 500,
+                              cursor: "pointer",
+                            }}
+                            onClick={() => setEditModal(null)}
+                            disabled={editing}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            style={{
+                              background: "#6366f1",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: 6,
+                              padding: "8px 18px",
+                              fontWeight: 500,
+                              cursor: "pointer",
+                            }}
+                            disabled={editing}
+                          >
+                            {editing ? "Saving..." : "Save"}
+                          </button>
+                        </div>
                       </div>
                     </form>
                   </div>
@@ -658,87 +821,116 @@ export default function CardsPage() {
               background: "#222a34",
               padding: 32,
               borderRadius: 12,
-              minWidth: 340,
+              minWidth: 760,
+              maxWidth: 1100,
               color: "#fff",
               boxShadow: "0 4px 24px 0 rgba(0,0,0,0.18)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <h2 style={{ marginBottom: 16 }}>Create Card</h2>
-            <form onSubmit={handleCreateCard}>
-              <div style={{ marginBottom: 18 }}>
-                <label
-                  style={{ display: "block", marginBottom: 6, fontWeight: 500 }}
-                >
-                  Card Name
-                </label>
-                <input
-                  type="text"
-                  value={cardName}
-                  onChange={(e) => setCardName(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "8px 10px",
-                    borderRadius: 6,
-                    border: "1px solid #6366f1",
-                    fontSize: 15,
-                    marginBottom: 4,
-                  }}
-                  placeholder="Enter card name"
-                  disabled={creating}
-                  autoFocus
-                />
-              </div>
-              <div style={{ marginBottom: 18 }}>
-                <label
-                  style={{ display: "block", marginBottom: 6, fontWeight: 500 }}
-                >
-                  Card Type
-                </label>
-                <select
-                  value={cardType}
-                  onChange={(e) => setCardType(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "8px 10px",
-                    borderRadius: 6,
-                    border: "1px solid #6366f1",
-                    fontSize: 15,
-                  }}
-                  disabled={creating}
-                >
-                  {CARD_TYPES.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ marginBottom: 18 }}>
-                <label
-                  style={{ display: "block", marginBottom: 6, fontWeight: 500 }}
-                >
-                  Subject
-                </label>
-                <select
-                  value={selectedSubject}
-                  onChange={(e) => setSelectedSubject(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "8px 10px",
-                    borderRadius: 6,
-                    border: "1px solid #6366f1",
-                    fontSize: 15,
-                  }}
-                  disabled={creating || loadingSubjects}
-                >
-                  <option value="">No subject</option>
-                  {subjects.map((subj) => (
-                    <option key={subj.id} value={subj.id}>
-                      {subj.title}
-                    </option>
-                  ))}
-                </select>
+            <form style={{ width: "100%" }} onSubmit={handleCreateCard}>
+              <div style={{ display: "flex", gap: 32 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ marginBottom: 18 }}>
+                    <label
+                      style={{
+                        display: "block",
+                        marginBottom: 6,
+                        fontWeight: 500,
+                      }}
+                    >
+                      Card Name
+                    </label>
+                    <input
+                      type="text"
+                      value={cardName}
+                      onChange={(e) => setCardName(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        borderRadius: 6,
+                        border: "1px solid #6366f1",
+                        fontSize: 15,
+                        marginBottom: 4,
+                        background: "var(--main-bg, #f5f7fb)",
+                        color: "var(--text-color, #121212)",
+                        fontFamily: "inherit",
+                        outline: "none",
+                      }}
+                      placeholder="Enter card name"
+                      disabled={creating}
+                      autoFocus
+                    />
+                  </div>
+                  <div style={{ marginBottom: 18 }}>
+                    <label
+                      style={{
+                        display: "block",
+                        marginBottom: 6,
+                        fontWeight: 500,
+                      }}
+                    >
+                      Subject
+                    </label>
+                    <select
+                      value={selectedSubject}
+                      onChange={(e) => setSelectedSubject(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        borderRadius: 6,
+                        border: "1px solid #6366f1",
+                        fontSize: 15,
+                        background: "var(--main-bg, #f5f7fb)",
+                        color: "var(--text-color, #121212)",
+                        fontFamily: "inherit",
+                        outline: "none",
+                      }}
+                      disabled={creating || loadingSubjects}
+                    >
+                      <option value="">No subject</option>
+                      {subjects.map((subj) => (
+                        <option key={subj.id} value={subj.id}>
+                          {subj.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ flex: 2, minWidth: 0 }}>
+                  <div style={{ marginBottom: 18, height: "100%" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        marginBottom: 6,
+                        fontWeight: 500,
+                      }}
+                    >
+                      Card Content
+                    </label>
+                    <textarea
+                      value={cardContent}
+                      onChange={(e) => setCardContent(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "12px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #6366f1",
+                        fontSize: 15,
+                        minHeight: 320,
+                        resize: "vertical",
+                        fontFamily: "inherit",
+                        background: "var(--main-bg, #f5f7fb)",
+                        color: "var(--text-color, #121212)",
+                        lineHeight: 1.6,
+                        outline: "none",
+                      }}
+                      placeholder="Enter card content"
+                      disabled={creating}
+                    />
+                  </div>
+                </div>
               </div>
               {error && (
                 <div style={{ color: "#f77", marginBottom: 10 }}>{error}</div>
