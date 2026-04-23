@@ -4,8 +4,12 @@ from app.db.client import supabase
 from app.services.pdf_extractor import extract_text_from_bytes
 from app.config import settings
 import uuid
+from ..models.upload import router as uploads_router
+import traceback
 
 router = APIRouter()
+# Re-export the router so app.main can include it
+router = uploads_router
 
 
 @router.post("/{subject_id}")
@@ -78,12 +82,7 @@ async def upload_file(
     except Exception as e:
         try:
             print("Upload error:", str(e))
+            print(traceback.format_exc())
         except Exception:
             pass
         raise HTTPException(status_code=500, detail=str(e))
-
-
-from ..models.upload import router as uploads_router
-
-# Re-export the router so app.main can include it
-router = uploads_router

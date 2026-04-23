@@ -3,7 +3,7 @@
 import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase, supabaseConfigured } from "../../lib/supabaseClient";
 import { api } from "../../lib/api";
 
 export default function ResourcesPage() {
@@ -16,10 +16,17 @@ export default function ResourcesPage() {
   }, [user]);
   async function fetchFiles() {
     if (!user) return;
+    if (!supabaseConfigured) {
+      console.error(
+        "Supabase not configured; set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment.",
+      );
+      setFiles([]);
+      return;
+    }
     try {
       const prefix = `${user.id}/`;
       const { data, error } = await supabase.storage
-        .from("studyos-uploads")
+        .from("comsos-uploads")
         .list(prefix, { limit: 100, offset: 0 });
       if (error) {
         console.error(error);
@@ -30,7 +37,7 @@ export default function ResourcesPage() {
           (data || []).map(async (item: any) => {
             const path = `${user.id}/${item.name}`;
             const { data: urlData } = supabase.storage
-              .from("studyos-uploads")
+              .from("comsos-uploads")
               .getPublicUrl(path);
             return { name: item.name, path, publicURL: urlData.publicUrl };
           }),
@@ -65,7 +72,8 @@ export default function ResourcesPage() {
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
     if (!file) return;
     if (!file.name.endsWith(".pdf")) {
       alert("Only PDF files are supported");
@@ -80,7 +88,8 @@ export default function ResourcesPage() {
       await api.uploads.upload(subjectId, file);
       // refresh listing
       await fetchFiles();
-      e.currentTarget.value = "";
+      // use captured input reference to avoid React synthetic event pooling
+      input.value = "";
     } catch (err: any) {
       console.error("Upload error:", err);
       alert(

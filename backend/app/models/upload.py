@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+import traceback
 from ..api.auth import get_current_user
 from ..db.client import supabase
 from ..services.pdf_extractor import extract_text_from_bytes
@@ -82,6 +83,7 @@ async def upload_file(
         # Log and return a structured error for debugging
         try:
             print("Upload error:", str(e))
+            print(traceback.format_exc())
         except Exception:
             pass
         raise HTTPException(status_code=500, detail=str(e))

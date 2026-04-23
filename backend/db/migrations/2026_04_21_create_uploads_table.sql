@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.uploads (
   subject_id uuid NULL REFERENCES public.subjects(id) ON DELETE SET NULL,
   file_name text NOT NULL,
   storage_path text NOT NULL,
-  bucket text NOT NULL DEFAULT 'studyos-uploads',
+  bucket text NOT NULL DEFAULT 'comsos-uploads',
   mime_type text,
   file_size bigint,
   public_url text,
