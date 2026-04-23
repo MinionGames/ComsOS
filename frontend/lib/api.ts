@@ -115,5 +115,37 @@ export const api = {
         );
       }
     },
+    getSignedUrl: async (uploadId: string | number) => {
+      // reuse same token logic as upload
+      let token: string | undefined = undefined;
+      try {
+        const sess = await supabase.auth.getSession();
+        token = sess.data.session?.access_token;
+      } catch (e) {}
+      if (!token) {
+        try {
+          token = localStorage.getItem("access_token") ?? undefined;
+        } catch (e) {
+          token = undefined;
+        }
+      }
+      if (typeof token === "string") {
+        const t = token.trim();
+        if (
+          t === "" ||
+          t.toLowerCase() === "null" ||
+          t.toLowerCase() === "undefined"
+        )
+          token = undefined;
+        else token = t;
+      }
+      const headers: any = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(`${BASE}/uploads/download/${uploadId}`, {
+        headers,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
   },
 };
