@@ -14,20 +14,12 @@ export default function LoadingOverlay() {
     // Fallback for initial load
     setLoading(false);
 
-    // Show loading overlay before full reload on tab focus
-    const handleFocus = () => {
-      setLoading(true);
-      setTimeout(() => {
-        window.location.reload();
-      }, 120); // Show spinner briefly before reload
-    };
-    window.addEventListener("focus", handleFocus);
+    // Do not reload on tab focus; preserve state and fetchers should refresh data as needed.
 
     return () => {
       window.removeEventListener("routeChangeStart", handleStart);
       window.removeEventListener("routeChangeComplete", handleStop);
       window.removeEventListener("routeChangeError", handleStop);
-      window.removeEventListener("focus", handleFocus);
     };
   }, []);
 

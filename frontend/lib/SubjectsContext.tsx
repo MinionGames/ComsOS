@@ -54,7 +54,11 @@ export const SubjectsProvider = ({
       setLoadingSubjects(false);
     }
     function onFocus() {
-      window.location.reload();
+      // Instead of a full reload, refresh subjects in-place.
+      if (user && user.id) {
+        // best-effort refresh; ignore errors
+        reloadSubjects(user.id, supabase).catch(() => {});
+      }
     }
     window.addEventListener("focus", onFocus);
     return () => {
