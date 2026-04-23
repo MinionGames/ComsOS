@@ -4,4 +4,16 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  // show a clear dev-time warning in the browser console
+  // so the developer knows why storage/list calls fail.
+  // Keep the client created to avoid runtime import errors elsewhere.
+  // eslint-disable-next-line no-console
+  console.warn(
+    "Supabase is not configured: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  );
+}
+
+export const supabaseConfigured = !!supabaseUrl && !!supabaseAnonKey;
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

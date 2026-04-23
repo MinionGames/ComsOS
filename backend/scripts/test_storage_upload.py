@@ -1,8 +1,15 @@
+import sys
+import pathlib
+
+# Make this script runnable from the repository root by ensuring the
+# backend package directory is on sys.path.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+
 from app.db.client import supabase
 from app.config import settings
 import uuid
 
-path = "test_upload.pdf"
+path = "backend/test_upload.pdf"
 with open(path, "rb") as f:
     data = f.read()
 

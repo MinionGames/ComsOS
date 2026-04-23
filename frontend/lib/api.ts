@@ -62,6 +62,41 @@ export const api = {
       } catch (e) {
         // ignore
       }
+      // fallback to localStorage if supabase session isn't available
+      if (!token) {
+        try {
+          token = localStorage.getItem("access_token") ?? undefined;
+        } catch (e) {
+          token = undefined;
+        }
+      }
+      // sanitize common bad values that may have been stored as strings
+      if (typeof token === "string") {
+        const t = token.trim();
+        if (
+          t === "" ||
+          t.toLowerCase() === "null" ||
+          t.toLowerCase() === "undefined"
+        ) {
+          token = undefined;
+        } else {
+          token = t;
+        }
+      }
+      // Basic JWT structure check (two or three dot-separated parts).
+      // If it doesn't look like a JWT, treat as missing so we don't send
+      // an unauthenticated POST request that will 401.
+      if (token && token.split(".").length < 2) {
+        token = undefined;
+      }
+
+      // Require a token for uploads — otherwise surface a helpful error
+      // instead of sending an unauthenticated POST (no preflight).
+      if (!token) {
+        throw new Error(
+          "No access token available. Please sign in before uploading.",
+        );
+      }
       try {
         const res = await fetch(`${BASE}/uploads/${subjectId}`, {
           method: "POST",
