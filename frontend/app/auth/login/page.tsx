@@ -24,12 +24,22 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    const { error } = await signInWithEmail(email, password);
-    if (error) {
-      setError(error.message);
-    } else {
-      router.push("/dashboard");
+    const res = await signInWithEmail(email, password);
+    const err = (res as any).error;
+    if (err) {
+      setError(err.message || String(err));
+      return;
     }
+    // store access token for backend API helper
+    const accessToken = (res as any).data?.session?.access_token;
+    if (accessToken) {
+      try {
+        window.localStorage.setItem("access_token", accessToken);
+      } catch (e) {
+        // ignore
+      }
+    }
+    router.push("/dashboard");
   };
 
   const bgColor = theme === "dark" ? "#111720" : "#f5f7fb";
