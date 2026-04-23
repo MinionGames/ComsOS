@@ -100,7 +100,8 @@ export default function ResourcesPage() {
     else (mq as any).addListener(handler);
     return () => {
       try {
-        if ((mq as any).removeEventListener) mq.removeEventListener("change", handler);
+        if ((mq as any).removeEventListener)
+          mq.removeEventListener("change", handler);
         else (mq as any).removeListener(handler);
       } catch (e) {}
     };
