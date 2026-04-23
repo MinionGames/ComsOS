@@ -86,3 +86,62 @@ async def upload_file(
         except Exception:
             pass
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/download/{upload_id}")
+async def get_signed_download_url(
+    upload_id: str, user_id: str = Depends(get_current_user)
+):
+    """Return a short-lived signed URL for downloading the file.
+
+    Only the owner can request the signed URL.
+    """
+    try:
+        print(
+            f"get_signed_download_url called for upload_id={upload_id} by user={user_id}"
+        )
+        # Fetch the upload record
+        res = (
+            supabase.table("uploads")
+            .select("id, user_id, storage_path, bucket")
+            .eq("id", upload_id)
+            .limit(1)
+            .execute()
+        )
+        row = None
+        try:
+            row = res.data[0]
+        except Exception:
+            row = None
+        if not row:
+            raise HTTPException(status_code=404, detail="Upload not found")
+        if row.get("user_id") != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        storage_path = row.get("storage_path")
+        bucket = row.get("bucket") or settings.storage_bucket
+
+        try:
+            signed = supabase.storage.from_(bucket).create_signed_url(storage_path, 60)
+            # storage.create_signed_url may return dict with 'signedURL' key
+            if isinstance(signed, dict):
+                signed_url = signed.get("signedURL") or signed.get("signedUrl")
+            else:
+                signed_url = getattr(signed, "signedURL", None) or getattr(
+                    signed, "signedUrl", None
+                )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to create signed URL: {e}"
+            )
+
+        if not signed_url:
+            raise HTTPException(
+                status_code=500, detail="Signed URL generation returned no URL"
+            )
+
+        return {"signed_url": signed_url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
