@@ -73,7 +73,8 @@ const SettingsPage = () => {
       "comsos-cards-time-format",
       String(cardTimeFormat),
     );
-    window.location.reload();
+    // No full reload: settings are persisted to localStorage and components
+    // that read those values will pick them up on next render.
   };
 
   return (

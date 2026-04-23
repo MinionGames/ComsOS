@@ -99,7 +99,8 @@ export default function CardsPage() {
   useEffect(() => {
     fetchCards();
     function onFocus() {
-      window.location.reload();
+      // refresh cards data when tab regains focus instead of reloading the page
+      fetchCards();
     }
     window.addEventListener("focus", onFocus);
     return () => {

@@ -70,6 +70,9 @@ export default function Sidebar() {
         <Link href="/cards" style={navLinkStyle}>
           Cards
         </Link>
+        <Link href="/resources" style={navLinkStyle}>
+          Resources
+        </Link>
         <Link href="/study-mode" style={navLinkStyle}>
           Study Mode
         </Link>
