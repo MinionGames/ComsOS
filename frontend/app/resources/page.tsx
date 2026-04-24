@@ -2,7 +2,8 @@
 
 import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { supabase, supabaseConfigured } from "../../lib/supabaseClient";
 import { api } from "../../lib/api";
 import { useSubjects } from "../../lib/SubjectsContext";
@@ -11,16 +12,20 @@ export default function ResourcesPage() {
   const { user, loading } = useUser();
   const [uploading, setUploading] = useState(false);
   const [files, setFiles] = useState<any[]>([]);
+  const fetchedRef = useRef(false);
+  const isFetchingRef = useRef(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingFile, setEditingFile] = useState<any>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingSubject, setEditingSubject] = useState("");
   const { subjects, loadingSubjects } = useSubjects();
+  const pathname = usePathname();
   const [editingSignedUrl, setEditingSignedUrl] = useState<string | null>(null);
   const [editingSignedUrlError, setEditingSignedUrlError] = useState<
     string | null
   >(null);
   const [isDark, setIsDark] = useState<boolean>(false);
+  const [extractedOpen, setExtractedOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (user) document.title = `Resources | ComsOS`;
@@ -28,40 +33,134 @@ export default function ResourcesPage() {
 
   async function fetchFiles() {
     if (!user) return;
-    try {
-      const { data, error } = await supabase
-        .from("uploads")
-        .select(
-          "id, file_name, public_url, storage_path, created_at, subject_id, extracted_text",
-        )
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (error) {
-        console.error("Failed to load uploads:", error);
-        setFiles([]);
-      } else {
-        const mapped = (data || []).map((r: any) => ({
-          id: r.id,
-          name: r.file_name,
-          publicURL: r.public_url,
-          path: r.storage_path,
-          created_at: r.created_at,
-          subject_id: r.subject_id,
-          content: r.extracted_text || "",
-        }));
-        setFiles(mapped);
+
+    // show spinner only when no cached files
+    const showSpinner = files.length === 0;
+    if (showSpinner) setUploading(false); // leave uploading state alone
+
+    if (isFetchingRef.current) return;
+
+    async function doFetch(attempt = 0) {
+      isFetchingRef.current = true;
+      const start = performance.now();
+      try {
+        const res = await supabase
+          .from("uploads")
+          .select(
+            "id, file_name, public_url, storage_path, created_at, subject_id, extracted_text",
+          )
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(200);
+
+        const duration = Math.round(performance.now() - start);
+
+        if (res.error) {
+          try {
+            console.error("Failed to load uploads:", {
+              error: res.error,
+              status: (res as any).status,
+              statusText: (res as any).statusText,
+              data: res.data,
+              duration,
+              attempt,
+            });
+          } catch (logErr) {
+            console.error("Failed to load uploads (fallback):", res, {
+              duration,
+              attempt,
+            });
+          }
+
+          if (attempt < 2) {
+            const delay = 300 * Math.pow(2, attempt);
+            await new Promise((r) => setTimeout(r, delay));
+            return doFetch(attempt + 1);
+          }
+
+          if (showSpinner) setFiles([]);
+        } else {
+          const data = res.data as any[] | null;
+          const mapped = (data || []).map((r: any) => ({
+            id: r.id,
+            name: r.file_name,
+            publicURL: r.public_url,
+            path: r.storage_path,
+            created_at: r.created_at,
+            subject_id: r.subject_id,
+            content: r.extracted_text || "",
+          }));
+          console.info("Loaded uploads", { count: mapped.length, duration });
+          setFiles(mapped);
+          // persist cache (per-user and generic fallback)
+          try {
+            if (typeof window !== "undefined") {
+              if (user?.id)
+                localStorage.setItem(
+                  `comsos:uploads:${user.id}`,
+                  JSON.stringify(mapped),
+                );
+              localStorage.setItem(`comsos:uploads`, JSON.stringify(mapped));
+            }
+          } catch (e) {}
+          fetchedRef.current = true;
+        }
+      } catch (e) {
+        console.error(e);
+        if (showSpinner) setFiles([]);
+      } finally {
+        isFetchingRef.current = false;
       }
-    } catch (e) {
-      console.error(e);
-      setFiles([]);
     }
+
+    await doFetch();
   }
 
   useEffect(() => {
-    fetchFiles();
+    // Only fetch when this page is active, or on mount if already on the page
+    if (!pathname || !pathname.startsWith("/resources")) return;
+
+    // load cached uploads first (per-user or generic)
+    try {
+      if (typeof window !== "undefined") {
+        let raw: string | null = null;
+        if (user && user.id)
+          raw = localStorage.getItem(`comsos:uploads:${user.id}`);
+        if (!raw) raw = localStorage.getItem(`comsos:uploads`);
+        if (raw) setFiles(JSON.parse(raw));
+      }
+    } catch (e) {}
+
+    // only fetch from DB the first time this page is opened in this session
+    if (!fetchedRef.current) fetchFiles();
+    if (typeof window === "undefined") return;
+    const onFocus = () => {
+      if (!fetchedRef.current) fetchFiles();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && !fetchedRef.current)
+        fetchFiles();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    function onNavigate(e: any) {
+      try {
+        const p = e?.detail?.pathname;
+        if (!p) return;
+        if (p.startsWith("/resources") && !fetchedRef.current) fetchFiles();
+      } catch (err) {}
+    }
+    window.addEventListener("comsos:navigate", onNavigate as EventListener);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener(
+        "comsos:navigate",
+        onNavigate as EventListener,
+      );
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, pathname]);
 
   // Load a signed URL when modal opens for private preview
   useEffect(() => {
@@ -107,7 +206,23 @@ export default function ResourcesPage() {
     };
   }, []);
 
-  if (loading) return null;
+  // If we're still resolving the auth state, don't blank the UI if we
+  // already have files loaded — show a small loading indicator only
+  // when there are no files yet.
+  if (loading && files.length === 0) {
+    return (
+      <div
+        style={{
+          padding: 32,
+          textAlign: "center",
+          fontFamily: "'Roboto', sans-serif",
+        }}
+      >
+        <div>Loading...</div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div
@@ -250,6 +365,7 @@ export default function ResourcesPage() {
             ))}
           </ul>
         )}
+
         {editModalOpen && (
           <div
             style={{
@@ -266,10 +382,10 @@ export default function ResourcesPage() {
               style={{
                 background: isDark ? "#0b1220" : "#fff",
                 color: isDark ? "#e6eef8" : "#000",
-                padding: 20,
+                padding: 24,
                 borderRadius: 8,
-                width: "96%",
-                maxWidth: 1100,
+                width: "98%",
+                maxWidth: 1300,
                 boxShadow: "0 8px 40px rgba(0,0,0,0.3)",
               }}
             >
@@ -349,19 +465,51 @@ export default function ResourcesPage() {
                   </select>
                 </div>
 
-                <div style={{ width: 520, minWidth: 360, maxWidth: 660 }}>
-                  <label
-                    style={{ display: "block", fontSize: 13, marginBottom: 6 }}
+                <div style={{ flex: 1, minWidth: 520 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 6,
+                    }}
                   >
-                    PDF Preview
-                  </label>
+                    <label style={{ display: "block", fontSize: 13 }}>
+                      PDF Preview
+                    </label>
+                    <button
+                      onClick={() => setExtractedOpen((v) => !v)}
+                      style={{
+                        background: extractedOpen
+                          ? isDark
+                            ? "#1f2937"
+                            : "#eef2ff"
+                          : isDark
+                            ? "#0b1220"
+                            : "#fff",
+                        border: `1px solid ${isDark ? "#223244" : "#ddd"}`,
+                        color: isDark ? "#e6eef8" : "#111827",
+                        padding: "6px 10px",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        fontSize: 13,
+                      }}
+                      title={
+                        extractedOpen
+                          ? "Hide extracted text"
+                          : "Show extracted text"
+                      }
+                    >
+                      {extractedOpen ? "Hide Extracted" : "Show Extracted"}
+                    </button>
+                  </div>
                   {editingSignedUrl || editingFile?.publicURL ? (
                     <iframe
                       src={editingSignedUrl || editingFile?.publicURL}
                       title="PDF preview"
                       style={{
                         width: "100%",
-                        height: 360,
+                        height: 520,
                         border: `1px solid ${isDark ? "#2c3e50" : "#ddd"}`,
                         borderRadius: 6,
                         background: isDark ? "#081024" : undefined,
@@ -371,7 +519,7 @@ export default function ResourcesPage() {
                     <div
                       style={{
                         width: "100%",
-                        height: 360,
+                        height: 520,
                         border: `1px dashed ${isDark ? "#294058" : "#ddd"}`,
                         borderRadius: 6,
                         display: "flex",
@@ -396,30 +544,57 @@ export default function ResourcesPage() {
                     </div>
                   )}
                 </div>
-
-                <div style={{ flex: 1, minWidth: 360 }}>
-                  <label
-                    style={{ display: "block", fontSize: 13, marginBottom: 6 }}
-                  >
-                    Extracted Content (read-only)
-                  </label>
-                  <textarea
-                    value={editingFile?.content || ""}
-                    readOnly
-                    style={{
-                      width: "100%",
-                      height: 360,
-                      minHeight: 360,
-                      fontFamily: "monospace",
-                      fontSize: 13,
-                      padding: 10,
-                      background: isDark ? "#071122" : "#f7f7f8",
-                      color: isDark ? "#e6eef8" : "#000",
-                      borderRadius: 6,
-                      border: `1px solid ${isDark ? "#223244" : "#e5e7eb"}`,
-                      overflowY: "auto",
-                    }}
-                  />
+                {/* extracted text panel: animated open/closed */}
+                <div
+                  style={
+                    extractedOpen
+                      ? {
+                          width: 420,
+                          minWidth: 360,
+                          transition:
+                            "width 220ms ease, opacity 220ms ease, margin-left 220ms ease",
+                          opacity: 1,
+                        }
+                      : {
+                          width: 0,
+                          minWidth: 0,
+                          transition:
+                            "width 220ms ease, opacity 220ms ease, margin-left 220ms ease",
+                          opacity: 0,
+                          overflow: "hidden",
+                          marginLeft: 0,
+                        }
+                  }
+                >
+                  <div style={{ paddingLeft: extractedOpen ? 0 : 0 }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: 13,
+                        marginBottom: 6,
+                      }}
+                    >
+                      Extracted Content (read-only)
+                    </label>
+                    <textarea
+                      value={editingFile?.content || ""}
+                      readOnly
+                      style={{
+                        width: "100%",
+                        height: 520,
+                        minHeight: 520,
+                        fontFamily: "monospace",
+                        fontSize: 13,
+                        padding: 10,
+                        background: isDark ? "#071122" : "#f7f7f8",
+                        color: isDark ? "#e6eef8" : "#000",
+                        borderRadius: 6,
+                        border: `1px solid ${isDark ? "#223244" : "#e5e7eb"}`,
+                        overflowY: "auto",
+                        display: extractedOpen ? "block" : "none",
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
