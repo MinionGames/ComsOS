@@ -61,16 +61,56 @@ export default function Sidebar() {
           padding: "0 18px",
         }}
       >
-        <Link href="/dashboard" style={navLinkStyle}>
+        <Link
+          href="/dashboard"
+          style={navLinkStyle}
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent("comsos:navigate", {
+                detail: { pathname: "/dashboard" },
+              }),
+            )
+          }
+        >
           Dashboard
         </Link>
-        <Link href="/subjects" style={navLinkStyle}>
+        <Link
+          href="/subjects"
+          style={navLinkStyle}
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent("comsos:navigate", {
+                detail: { pathname: "/subjects" },
+              }),
+            )
+          }
+        >
           Subjects
         </Link>
-        <Link href="/cards" style={navLinkStyle}>
+        <Link
+          href="/cards"
+          style={navLinkStyle}
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent("comsos:navigate", {
+                detail: { pathname: "/cards" },
+              }),
+            )
+          }
+        >
           Cards
         </Link>
-        <Link href="/resources" style={navLinkStyle}>
+        <Link
+          href="/resources"
+          style={navLinkStyle}
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent("comsos:navigate", {
+                detail: { pathname: "/resources" },
+              }),
+            )
+          }
+        >
           Resources
         </Link>
         <Link href="/study-mode" style={navLinkStyle}>
