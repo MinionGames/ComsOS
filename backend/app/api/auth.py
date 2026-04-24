@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
-from jose import jwt, JWTError
+from jose import jwt
 from ..config import settings
 from ..db.client import supabase
 import warnings
@@ -32,7 +32,8 @@ async def get_current_user(authorization: str = Header(None)):
         parts = token.split(".")
         if len(parts) < 2:
             raise ValueError("Invalid JWT format")
-        import base64, json
+        import base64
+        import json
 
         b = parts[1]
         # pad base64 string
@@ -124,7 +125,8 @@ async def me(user_id: str = Depends(get_current_user)):
 @router.post("/logout")
 async def logout(authorization: str = Header(...)):
     # Expect header like: "Bearer <access_token>"
-    token = authorization.replace("Bearer ", "")
+    # Extract token if needed in the future; currently not used
+    _ = authorization.replace("Bearer ", "")
     # Try to sign out via Supabase client if available; otherwise return OK
     try:
         # supabase-py may support sign_out; call it if present

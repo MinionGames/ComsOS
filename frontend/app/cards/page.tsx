@@ -1,12 +1,12 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 
 // ...existing code...
 import { useUser } from "../../lib/UserContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSubjects } from "../../lib/SubjectsContext";
 import { useDraggableList } from "./useDraggableList";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
 
 const CARD_TYPES = [
   { value: "task", label: "Task" },
@@ -19,9 +19,12 @@ export default function CardsPage() {
   const [cards, setCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [focusReloadNeeded, setFocusReloadNeeded] = useState(false);
-  const { user } = useUser();
+  const { user, loading: userLoading } = useUser();
   const { subjects, loadingSubjects } = useSubjects();
-  const [selectedSubject, setSelectedSubject] = useState<string>("");
+  const pathname = usePathname();
+  const fetchedRef = useRef(false);
+  const isFetchingRef = useRef(false);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   // Card creation state
@@ -34,10 +37,10 @@ export default function CardsPage() {
   const [editModal, setEditModal] = useState<null | any>(null);
   const [editName, setEditName] = useState("");
   const [editContent, setEditContent] = useState("");
-  const [editSubject, setEditSubject] = useState("");
+  const [editSubject, setEditSubject] = useState<string | null>(null);
   const [editMastery, setEditMastery] = useState(0);
-  const [editLastReviewed, setEditLastReviewed] = useState("");
-  const [editNextReview, setEditNextReview] = useState("");
+  const [editLastReviewed, setEditLastReviewed] = useState<string | null>(null);
+  const [editNextReview, setEditNextReview] = useState<string | null>(null);
   const [cardTimeFormat, setCardTimeFormat] = useState("relative");
   const [editing, setEditing] = useState(false);
   const [editError, setEditError] = useState("");
@@ -74,40 +77,162 @@ export default function CardsPage() {
 
   // Fetch cards function for reuse
   async function fetchCards() {
+    // If auth is still resolving, keep the existing cards visible and
+    // skip clearing them. Only clear when we know there's no user.
     if (!user) {
-      setCards([]);
-      setLoading(false);
+      if (!userLoading) {
+        setCards([]);
+        setLoading(false);
+      } else {
+        // Auth still resolving. If we have a cached generic copy, restore it
+        // so the UI doesn't show a spinner while auth completes.
+        try {
+          if (typeof window !== "undefined") {
+            let raw: string | null = null;
+            // prefer per-user cache when available
+            if (user && user.id)
+              raw = localStorage.getItem(`comsos:cards:${user.id}`);
+            if (!raw) raw = localStorage.getItem(`comsos:cards`);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setCards(parsed);
+                setLoading(false);
+                // do not mark fetchedRef; wait for real fetch when user set
+              }
+            }
+          }
+        } catch (e) {}
+      }
       return;
     }
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("cards")
-      .select(
-        "id, title, type, content, file_url, due_date, created_at, subject_id, order, mastery_level, last_reviewed_at, next_review_at",
-      )
-      .eq("user_id", user.id)
-      .order("order", { ascending: true });
-    if (error) {
-      setCards([]);
-    } else {
-      setCards(data || []);
+
+    // show spinner only when there are no cached cards
+    const showSpinner = cards.length === 0;
+    if (showSpinner) setLoading(true);
+
+    if (isFetchingRef.current) return;
+
+    async function doFetch(attempt = 0) {
+      isFetchingRef.current = true;
+      const start = performance.now();
+      try {
+        const res = await supabase
+          .from("cards")
+          .select(
+            "id, title, type, content, file_url, due_date, created_at, subject_id, order, mastery_level, last_reviewed_at, next_review_at",
+          )
+          .eq("user_id", user.id)
+          .order("order", { ascending: true });
+
+        const duration = Math.round(performance.now() - start);
+
+        if (res.error) {
+          try {
+            console.error("Failed to load cards:", {
+              error: res.error,
+              status: (res as any).status,
+              statusText: (res as any).statusText,
+              data: res.data,
+              duration,
+              attempt,
+            });
+          } catch (logErr) {
+            console.error("Failed to load cards (fallback):", res, {
+              duration,
+              attempt,
+            });
+          }
+
+          if (attempt < 2) {
+            const delay = 300 * Math.pow(2, attempt);
+            await new Promise((r) => setTimeout(r, delay));
+            return doFetch(attempt + 1);
+          }
+
+          if (showSpinner) setCards([]);
+        } else {
+          console.info("Loaded cards", {
+            count: (res.data || []).length,
+            duration,
+          });
+          setCards(res.data || []);
+          // persist to localStorage (per-user and generic fallback)
+          try {
+            if (typeof window !== "undefined") {
+              if (user?.id)
+                localStorage.setItem(
+                  `comsos:cards:${user.id}`,
+                  JSON.stringify(res.data || []),
+                );
+              localStorage.setItem(
+                `comsos:cards`,
+                JSON.stringify(res.data || []),
+              );
+            }
+          } catch (e) {}
+          fetchedRef.current = true;
+        }
+      } catch (e) {
+        console.error("Error fetching cards:", e);
+        if (showSpinner) setCards([]);
+      } finally {
+        isFetchingRef.current = false;
+        if (showSpinner) setLoading(false);
+        setFocusReloadNeeded(false);
+      }
     }
-    setLoading(false);
-    setFocusReloadNeeded(false);
+
+    await doFetch();
   }
 
   useEffect(() => {
-    fetchCards();
-    function onFocus() {
-      // refresh cards data when tab regains focus instead of reloading the page
+    // Load cached cards first (per-user)
+    try {
+      if (typeof window !== "undefined") {
+        let raw: string | null = null;
+        if (user && user.id)
+          raw = localStorage.getItem(`comsos:cards:${user.id}`);
+        if (!raw) raw = localStorage.getItem(`comsos:cards`);
+        if (raw) {
+          setCards(JSON.parse(raw));
+          setLoading(false);
+        }
+      }
+    } catch (e) {}
+
+    // only fetch from DB the first time this page is opened in this session
+    if (!fetchedRef.current && pathname && pathname.startsWith("/cards")) {
       fetchCards();
     }
+    if (typeof window === "undefined") return;
+    function onFocus() {
+      if (!fetchedRef.current) fetchCards();
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible" && !fetchedRef.current)
+        fetchCards();
+    }
+    function onNavigate(e: any) {
+      try {
+        const p = e?.detail?.pathname;
+        if (!p) return;
+        if (p.startsWith("/cards")) fetchCards();
+      } catch (err) {}
+    }
     window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("comsos:navigate", onNavigate as EventListener);
     return () => {
       window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener(
+        "comsos:navigate",
+        onNavigate as EventListener,
+      );
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, userLoading, pathname]);
 
   async function handleCreateCard(e: any) {
     e.preventDefault();
@@ -145,6 +270,23 @@ export default function CardsPage() {
       .order("created_at", { ascending: false });
     setCards(data || []);
     setLoading(false);
+    // update cache after insert
+    try {
+      if (typeof window !== "undefined") {
+        if (user && user.id) {
+          const raw = localStorage.getItem(`comsos:cards:${user.id}`);
+          const arr = raw ? (JSON.parse(raw) as any[]) : [];
+          localStorage.setItem(
+            `comsos:cards:${user.id}`,
+            JSON.stringify(data || arr),
+          );
+        }
+        // also update generic cache
+        const rawGen = localStorage.getItem(`comsos:cards`);
+        const arrGen = rawGen ? (JSON.parse(rawGen) as any[]) : [];
+        localStorage.setItem(`comsos:cards`, JSON.stringify(data || arrGen));
+      }
+    } catch (e) {}
   }
 
   // Save new order to Supabase
@@ -554,7 +696,7 @@ export default function CardsPage() {
                               Subject
                             </label>
                             <select
-                              value={editSubject}
+                              value={editSubject ?? ""}
                               onChange={(e) => setEditSubject(e.target.value)}
                               style={{
                                 width: "100%",
@@ -666,7 +808,7 @@ export default function CardsPage() {
                             </label>
                             <input
                               type="datetime-local"
-                              value={editNextReview}
+                              value={editNextReview ?? ""}
                               onChange={(e) =>
                                 setEditNextReview(e.target.value)
                               }
@@ -875,7 +1017,7 @@ export default function CardsPage() {
                       Subject
                     </label>
                     <select
-                      value={selectedSubject}
+                      value={selectedSubject ?? ""}
                       onChange={(e) => setSelectedSubject(e.target.value)}
                       style={{
                         width: "100%",
