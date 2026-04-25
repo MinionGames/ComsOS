@@ -11,6 +11,7 @@ import { useSubjects } from "../../lib/SubjectsContext";
 export default function ResourcesPage() {
   const { user, loading } = useUser();
   const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<any[]>([]);
   const fetchedRef = useRef(false);
   const isFetchingRef = useRef(false);
@@ -92,6 +93,18 @@ export default function ResourcesPage() {
           }));
           console.info("Loaded uploads", { count: mapped.length, duration });
           setFiles(mapped);
+          // If the edit modal is open for a file, sync the editingFile state
+          // with the freshly-fetched record so publicURL and content stay current.
+          try {
+            if (editingFile && editingFile.id) {
+              const updated = mapped.find((m: any) => m.id === editingFile.id);
+              if (updated)
+                setEditingFile((prev: any) => ({
+                  ...(prev || {}),
+                  ...updated,
+                }));
+            }
+          } catch (e) {}
           // persist cache (per-user and generic fallback)
           try {
             if (typeof window !== "undefined") {
@@ -131,15 +144,15 @@ export default function ResourcesPage() {
       }
     } catch (e) {}
 
-    // only fetch from DB the first time this page is opened in this session
+    // fetch now and whenever the page regains focus/visibility or navigation returns
     if (!fetchedRef.current) fetchFiles();
     if (typeof window === "undefined") return;
     const onFocus = () => {
-      if (!fetchedRef.current) fetchFiles();
+      // always attempt to refresh files when window regains focus
+      fetchFiles();
     };
     const onVisibility = () => {
-      if (document.visibilityState === "visible" && !fetchedRef.current)
-        fetchFiles();
+      if (document.visibilityState === "visible") fetchFiles();
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);
@@ -147,7 +160,7 @@ export default function ResourcesPage() {
       try {
         const p = e?.detail?.pathname;
         if (!p) return;
-        if (p.startsWith("/resources") && !fetchedRef.current) fetchFiles();
+        if (p.startsWith("/resources")) fetchFiles();
       } catch (err) {}
     }
     window.addEventListener("comsos:navigate", onNavigate as EventListener);
@@ -165,10 +178,11 @@ export default function ResourcesPage() {
   // Load a signed URL when modal opens for private preview
   useEffect(() => {
     if (!editModalOpen || !editingFile) return;
-    setEditingSignedUrl(null);
-    setEditingSignedUrlError(null);
     let cancelled = false;
-    (async () => {
+
+    async function fetchSignedUrl() {
+      setEditingSignedUrl(null);
+      setEditingSignedUrlError(null);
       try {
         const j = await api.uploads.getSignedUrl(editingFile.id);
         if (!cancelled && j?.signed_url) setEditingSignedUrl(j.signed_url);
@@ -176,9 +190,38 @@ export default function ResourcesPage() {
         console.error("Failed to fetch signed URL:", e);
         if (!cancelled) setEditingSignedUrlError(e?.message || String(e));
       }
-    })();
+    }
+
+    // initial fetch
+    fetchSignedUrl();
+
+    // refresh signed URL when returning to the tab or navigating back
+    const onFocus = () => {
+      fetchSignedUrl();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") fetchSignedUrl();
+    };
+    const onNavigate = (e: any) => {
+      try {
+        const p = e?.detail?.pathname;
+        if (!p) return;
+        if (p.startsWith("/resources")) fetchSignedUrl();
+      } catch (err) {}
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("comsos:navigate", onNavigate as EventListener);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener(
+        "comsos:navigate",
+        onNavigate as EventListener,
+      );
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editModalOpen, editingFile]);
@@ -268,6 +311,89 @@ export default function ResourcesPage() {
     }
   }
 
+  // Save edits to upload metadata (name and subject)
+  async function handleSaveEdit() {
+    if (!editingFile) return;
+    try {
+      const updates: any = {};
+      if (editingTitle != null) updates.file_name = editingTitle;
+      // normalize empty string to null for subject
+      updates.subject_id = editingSubject || null;
+      const { data, error } = await supabase
+        .from("uploads")
+        .update(updates)
+        .eq("id", editingFile.id)
+        .select();
+      if (error) {
+        console.error("Failed to update upload:", error);
+        alert(error.message || "Failed to save");
+        return;
+      }
+      const updated = (data && data[0]) || null;
+      // Update local state list
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.id === editingFile.id
+            ? {
+                ...f,
+                name: updated?.file_name ?? editingTitle,
+                subject_id: updated?.subject_id ?? (editingSubject || null),
+              }
+            : f,
+        ),
+      );
+      // update editingFile object shown in modal
+      setEditingFile((prev: any) => ({
+        ...(prev || {}),
+        name: editingTitle,
+        subject_id: editingSubject || null,
+      }));
+
+      // update cached localStorage entries
+      try {
+        if (typeof window !== "undefined") {
+          const userKey = user?.id ? `comsos:uploads:${user.id}` : null;
+          if (userKey) {
+            const raw = localStorage.getItem(userKey);
+            if (raw) {
+              const arr = JSON.parse(raw) as any[];
+              const newArr = arr.map((r) =>
+                r.id === editingFile.id
+                  ? {
+                      ...r,
+                      name: updated?.file_name ?? editingTitle,
+                      subject_id:
+                        updated?.subject_id ?? (editingSubject || null),
+                    }
+                  : r,
+              );
+              localStorage.setItem(userKey, JSON.stringify(newArr));
+            }
+          }
+          const rawGen = localStorage.getItem("comsos:uploads");
+          if (rawGen) {
+            const arr = JSON.parse(rawGen) as any[];
+            const newArr = arr.map((r) =>
+              r.id === editingFile.id
+                ? {
+                    ...r,
+                    name: updated?.file_name ?? editingTitle,
+                    subject_id: updated?.subject_id ?? (editingSubject || null),
+                  }
+                : r,
+            );
+            localStorage.setItem("comsos:uploads", JSON.stringify(newArr));
+          }
+        }
+      } catch (e) {}
+
+      setEditModalOpen(false);
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message || String(e));
+    }
+  }
+
   return (
     <div style={{ padding: 32, fontFamily: "'Roboto', sans-serif" }}>
       <h1 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: 12 }}>
@@ -280,12 +406,38 @@ export default function ResourcesPage() {
 
       <div style={{ marginTop: 20, maxWidth: 700 }}>
         <label style={{ display: "block", marginBottom: 8 }}>Upload PDF</label>
+        {/* Hidden native file input - replaced with custom button */}
         <input
+          ref={fileInputRef}
           type="file"
           accept="application/pdf"
           onChange={handleUpload}
           disabled={uploading}
+          style={{ display: "none" }}
         />
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            style={{
+              background: "#6366f1",
+              color: "#fff",
+              border: "none",
+              borderRadius: 9999,
+              padding: "10px 18px",
+              fontWeight: 600,
+              fontSize: 15,
+              cursor: uploading ? "not-allowed" : "pointer",
+              boxShadow: "0 6px 18px rgba(99,102,241,0.12)",
+            }}
+          >
+            {uploading ? "Uploading..." : "Upload PDF"}
+          </button>
+          {uploading && (
+            <div style={{ marginTop: 8, color: "#888" }}>Uploading...</div>
+          )}
+        </div>
         {uploading && (
           <div style={{ marginTop: 8, color: "#888" }}>Uploading...</div>
         )}
@@ -384,9 +536,14 @@ export default function ResourcesPage() {
                 color: isDark ? "#e6eef8" : "#000",
                 padding: 24,
                 borderRadius: 8,
-                width: "98%",
-                maxWidth: 1300,
+                width: "100%",
+                maxWidth: "none",
+                height: "90vh",
+                maxHeight: "90vh",
                 boxShadow: "0 8px 40px rgba(0,0,0,0.3)",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
               }}
             >
               <div
@@ -397,7 +554,22 @@ export default function ResourcesPage() {
                 }}
               >
                 <h2 style={{ margin: 0 }}>Edit Source</h2>
-                <div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <button
+                    onClick={handleSaveEdit}
+                    disabled={!editingFile}
+                    style={{
+                      background: "#16a34a",
+                      color: "#fff",
+                      border: "none",
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      cursor: editingFile ? "pointer" : "not-allowed",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Save
+                  </button>
                   <button
                     onClick={() => {
                       setEditModalOpen(false);
@@ -415,8 +587,16 @@ export default function ResourcesPage() {
                   </button>
                 </div>
               </div>
-              <div style={{ marginTop: 12, display: "flex", gap: 18 }}>
-                <div style={{ width: 320, minWidth: 240 }}>
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "flex",
+                  gap: 18,
+                  flex: 1,
+                  overflow: "hidden",
+                }}
+              >
+                <div style={{ width: 320, minWidth: 240, overflow: "auto" }}>
                   <label
                     style={{ display: "block", fontSize: 13, marginBottom: 6 }}
                   >
@@ -465,7 +645,15 @@ export default function ResourcesPage() {
                   </select>
                 </div>
 
-                <div style={{ flex: 1, minWidth: 520 }}>
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 520,
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden",
+                  }}
+                >
                   <div
                     style={{
                       display: "flex",
@@ -505,14 +693,20 @@ export default function ResourcesPage() {
                   </div>
                   {editingSignedUrl || editingFile?.publicURL ? (
                     <iframe
+                      key={
+                        editingSignedUrl ||
+                        editingFile?.publicURL ||
+                        editingFile?.id
+                      }
                       src={editingSignedUrl || editingFile?.publicURL}
                       title="PDF preview"
                       style={{
                         width: "100%",
-                        height: 520,
+                        height: "100%",
                         border: `1px solid ${isDark ? "#2c3e50" : "#ddd"}`,
                         borderRadius: 6,
                         background: isDark ? "#081024" : undefined,
+                        flex: 1,
                       }}
                     />
                   ) : (
@@ -550,10 +744,11 @@ export default function ResourcesPage() {
                     extractedOpen
                       ? {
                           width: 420,
-                          minWidth: 360,
+                          minWidth: 420,
                           transition:
                             "width 220ms ease, opacity 220ms ease, margin-left 220ms ease",
                           opacity: 1,
+                          overflow: "auto",
                         }
                       : {
                           width: 0,

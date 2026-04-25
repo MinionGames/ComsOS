@@ -159,8 +159,12 @@ export const SubjectsProvider = ({
           p.startsWith("/cards") ||
           p.startsWith("/resources")
         ) {
-          if (user && user.id)
+          if (user && user.id) {
             reloadSubjects(user.id, supabase).catch(() => {});
+            // also refresh cached cards and uploads so previews and lists are available
+            fetchAndCacheCards(user.id, supabase).catch(() => {});
+            fetchAndCacheUploads(user.id, supabase).catch(() => {});
+          }
         }
       } catch (err) {}
     }

@@ -54,20 +54,20 @@ export const api = {
     upload: async (subjectId: string, file: File) => {
       const form = new FormData();
       form.append("file", file);
-      // get current session token from Supabase client to avoid relying on localStorage
+      // Prefer reading token from localStorage (fast, avoids gotrue locks).
+      // Fall back to supabase.auth.getSession() only if localStorage is empty.
       let token: string | undefined = undefined;
       try {
-        const sess = await supabase.auth.getSession();
-        token = sess.data.session?.access_token;
+        token = localStorage.getItem("access_token") ?? undefined;
       } catch (e) {
-        // ignore
+        token = undefined;
       }
-      // fallback to localStorage if supabase session isn't available
       if (!token) {
         try {
-          token = localStorage.getItem("access_token") ?? undefined;
+          const sess = await supabase.auth.getSession();
+          token = sess.data.session?.access_token;
         } catch (e) {
-          token = undefined;
+          // ignore
         }
       }
       // sanitize common bad values that may have been stored as strings
@@ -118,16 +118,17 @@ export const api = {
     getSignedUrl: async (uploadId: string | number) => {
       // reuse same token logic as upload
       let token: string | undefined = undefined;
+      // Prefer localStorage first to avoid calling gotrue locks frequently.
       try {
-        const sess = await supabase.auth.getSession();
-        token = sess.data.session?.access_token;
-      } catch (e) {}
+        token = localStorage.getItem("access_token") ?? undefined;
+      } catch (e) {
+        token = undefined;
+      }
       if (!token) {
         try {
-          token = localStorage.getItem("access_token") ?? undefined;
-        } catch (e) {
-          token = undefined;
-        }
+          const sess = await supabase.auth.getSession();
+          token = sess.data.session?.access_token;
+        } catch (e) {}
       }
       if (typeof token === "string") {
         const t = token.trim();
