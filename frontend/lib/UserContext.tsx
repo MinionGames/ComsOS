@@ -29,6 +29,31 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!ignore) {
         setUser(data.session?.user ?? null);
+        // persist access token for backend API
+        try {
+          const tok =
+            (data.session as any)?.access_token ??
+            (data.session as any)?.accessToken;
+          if (tok) {
+            window.localStorage.setItem("access_token", tok as string);
+            // ping backend to confirm server recognizes this token
+            try {
+              const res = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/auth/me`,
+                {
+                  headers: { Authorization: `Bearer ${tok}` },
+                },
+              );
+              if (!res.ok) {
+                console.warn("Backend /auth/me responded", res.status);
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
         setLoading(false);
         if (data.session?.user) {
           const profile = await getOrCreateUserProfile({
@@ -63,7 +88,12 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <UserContext.Provider value={{ user: profile ? { ...user, name: profile.name } : user, loading }}>
+    <UserContext.Provider
+      value={{
+        user: profile ? { ...user, name: profile.name } : user,
+        loading,
+      }}
+    >
       {children}
     </UserContext.Provider>
   );

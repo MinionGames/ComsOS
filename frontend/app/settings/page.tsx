@@ -8,6 +8,42 @@ import { useState, useEffect } from "react";
 
 const SettingsPage = () => {
   const { user, loading } = useUser();
+  const [is24Hour, setIs24Hour] = useState(false);
+  const [showSeconds, setShowSeconds] = useState(true);
+  const [cardTimeFormat, setCardTimeFormat] = useState("relative");
+  const [initialCardTimeFormat, setInitialCardTimeFormat] =
+    useState("relative");
+  const [initialIs24Hour, setInitialIs24Hour] = useState(false);
+  const [initialShowSeconds, setInitialShowSeconds] = useState(true);
+  useEffect(() => {
+    const stored24 = window.localStorage.getItem("comsos-clock-24hr");
+    const storedSeconds = window.localStorage.getItem("comsos-show-seconds");
+    const storedCardFormat = window.localStorage.getItem(
+      "comsos-cards-time-format",
+    );
+
+    // Robustly parse values, default to false/true if not set
+    let starting24 = false;
+    if (stored24 === "true") starting24 = true;
+    else if (stored24 === "false") starting24 = false;
+    // If null or any other value, default to false
+
+    let startingSeconds = true;
+    if (storedSeconds === "false") startingSeconds = false;
+    else if (storedSeconds === "true") startingSeconds = true;
+    // If null or any other value, default to true
+
+    setIs24Hour(starting24);
+    setInitialIs24Hour(starting24);
+    setShowSeconds(startingSeconds);
+    setInitialShowSeconds(startingSeconds);
+    // card time format: 'relative' or 'absolute'
+    let startingCardFormat = "relative";
+    if (storedCardFormat === "absolute") startingCardFormat = "absolute";
+    else if (storedCardFormat === "relative") startingCardFormat = "relative";
+    setCardTimeFormat(startingCardFormat);
+    setInitialCardTimeFormat(startingCardFormat);
+  }, []);
 
   if (loading) return null;
   if (!user) {
@@ -25,45 +61,28 @@ const SettingsPage = () => {
     );
   }
 
-  const [is24Hour, setIs24Hour] = useState(false);
-  const [showSeconds, setShowSeconds] = useState(true);
-  const [initialIs24Hour, setInitialIs24Hour] = useState(false);
-  const [initialShowSeconds, setInitialShowSeconds] = useState(true);
-
-  useEffect(() => {
-    const stored24 = window.localStorage.getItem("comsos-clock-24hr");
-    const storedSeconds = window.localStorage.getItem("comsos-show-seconds");
-
-    // Robustly parse values, default to false/true if not set
-    let starting24 = false;
-    if (stored24 === "true") starting24 = true;
-    else if (stored24 === "false") starting24 = false;
-    // If null or any other value, default to false
-
-    let startingSeconds = true;
-    if (storedSeconds === "false") startingSeconds = false;
-    else if (storedSeconds === "true") startingSeconds = true;
-    // If null or any other value, default to true
-
-    setIs24Hour(starting24);
-    setInitialIs24Hour(starting24);
-    setShowSeconds(startingSeconds);
-    setInitialShowSeconds(startingSeconds);
-  }, []);
-
   const hasChanges =
-    is24Hour !== initialIs24Hour || showSeconds !== initialShowSeconds;
+    is24Hour !== initialIs24Hour ||
+    showSeconds !== initialShowSeconds ||
+    cardTimeFormat !== initialCardTimeFormat;
 
   const saveSettings = () => {
     window.localStorage.setItem("comsos-clock-24hr", String(is24Hour));
     window.localStorage.setItem("comsos-show-seconds", String(showSeconds));
-    window.location.reload();
+    window.localStorage.setItem(
+      "comsos-cards-time-format",
+      String(cardTimeFormat),
+    );
+    // No full reload: settings are persisted to localStorage and components
+    // that read those values will pick them up on next render.
   };
 
   return (
     <div style={{ padding: 32 }}>
-      <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: 12 }}>Settings</h1>
-      <p style={{ fontSize: '1.1rem', color: '#aaa' }}>
+      <h1 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: 12 }}>
+        Settings
+      </h1>
+      <p style={{ fontSize: "1.1rem", color: "#aaa" }}>
         Manage your account and workspace settings here.
       </p>
 
@@ -92,6 +111,40 @@ const SettingsPage = () => {
             onChange={(e) => setShowSeconds(e.target.checked)}
           />
           <span>Show seconds in time display</span>
+        </label>
+      </section>
+
+      <section style={{ marginTop: "24px", maxWidth: "600px" }}>
+        <h2 style={{ marginBottom: "12px" }}>Cards</h2>
+        <label style={{ display: "block", marginBottom: 12 }}>
+          Show card dates as
+        </label>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            marginBottom: 8,
+          }}
+        >
+          <input
+            type="radio"
+            name="cardTime"
+            value="relative"
+            checked={cardTimeFormat === "relative"}
+            onChange={() => setCardTimeFormat("relative")}
+          />
+          <span>Relative (e.g., 2 days ago)</span>
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <input
+            type="radio"
+            name="cardTime"
+            value="absolute"
+            checked={cardTimeFormat === "absolute"}
+            onChange={() => setCardTimeFormat("absolute")}
+          />
+          <span>Absolute (e.g., Apr 21, 2026)</span>
         </label>
       </section>
 

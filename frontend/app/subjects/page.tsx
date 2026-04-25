@@ -49,8 +49,29 @@ export default function SubjectsPage() {
     {},
   );
   useEffect(() => {
+    if (!user) return;
+
+    // Compute counts from local cache immediately so UI is responsive
+    try {
+      let raw: string | null = null;
+      raw = localStorage.getItem(`comsos:cards:${user.id}`);
+      if (!raw) raw = localStorage.getItem(`comsos:cards`);
+      if (raw) {
+        const arr = JSON.parse(raw) as any[];
+        const cachedCounts: { [subjectId: string]: number } = {};
+        arr.forEach((row: any) => {
+          if (row && row.subject_id) {
+            cachedCounts[row.subject_id] =
+              (cachedCounts[row.subject_id] || 0) + 1;
+          }
+        });
+        setCardCounts(cachedCounts);
+      }
+    } catch (e) {
+      // ignore parse errors
+    }
+
     async function fetchCardCounts() {
-      if (!user) return;
       const { data, error } = await supabase
         .from("cards")
         .select("id, subject_id")
@@ -66,7 +87,7 @@ export default function SubjectsPage() {
       }
     }
     fetchCardCounts();
-  }, [user, subjects]);
+  }, [user, subjects, focusReloadNeeded]);
 
   // Save new order to Supabase
   async function saveOrderToDatabase(newSubjects: any[]) {
@@ -101,6 +122,38 @@ export default function SubjectsPage() {
     );
   }
 
+  // Handle subject creation
+  async function handleCreateSubject(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user) return;
+    setCreating(true);
+    setError("");
+    setSuccess("");
+    try {
+      const { data, error } = await supabase
+        .from("subjects")
+        .insert([
+          {
+            user_id: user.id,
+            title: subjectName,
+            color: subjectColor,
+            description: subjectDescription,
+          },
+        ])
+        .select();
+      if (error) throw error;
+      setSuccess("Subject created!");
+      setSubjectName("");
+      setSubjectColor("#6366f1");
+      setSubjectDescription("");
+      setShowModal(false);
+      if (reloadSubjects) await reloadSubjects(user.id, supabase);
+    } catch (err: any) {
+      setError(err.message || "Failed to create subject");
+    } finally {
+      setCreating(false);
+    }
+  }
   return (
     <div style={{ padding: 32 }}>
       <h1 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: 12 }}>

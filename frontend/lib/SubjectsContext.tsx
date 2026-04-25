@@ -5,6 +5,7 @@ interface Subject {
   id: string;
   title: string;
   color: string;
+  description?: string;
 }
 
 interface SubjectsContextType {
@@ -22,6 +23,7 @@ const SubjectsContext = createContext<SubjectsContextType | undefined>(
 );
 
 import { useUser } from "./UserContext";
+import { usePathname } from "next/navigation";
 import { supabase } from "./supabaseClient";
 
 export const SubjectsProvider = ({
@@ -32,35 +34,151 @@ export const SubjectsProvider = ({
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loadingSubjects, setLoadingSubjects] = useState(true);
   const [focusReloadNeeded, setFocusReloadNeeded] = React.useState(false);
-  const { user } = useUser();
+  const { user, loading: userLoading } = useUser();
+  const pathname = usePathname();
 
-  const reloadSubjects = useCallback(async (userId: string, supabase: any) => {
-    setLoadingSubjects(true);
-    const { data } = await supabase
-      .from("subjects")
-      .select("id, title, color, description, order")
-      .eq("user_id", userId)
-      .order("order", { ascending: true });
-    setSubjects(data || []);
-    setLoadingSubjects(false);
-  }, []);
+  // Reload subjects; keep the existing list visible while refreshing
+  // by only showing the loading state when there are no subjects yet.
+  async function reloadSubjects(userId: string, supabaseClient: any) {
+    const showLoading = subjects.length === 0;
+    try {
+      if (showLoading) setLoadingSubjects(true);
+      const { data, error } = await supabaseClient
+        .from("subjects")
+        .select("id, title, color, description, order")
+        .eq("user_id", userId)
+        .order("order", { ascending: true });
+      if (!error) setSubjects(data || []);
+      else setSubjects([]);
+    } catch (e) {
+      setSubjects([]);
+    } finally {
+      if (showLoading) setLoadingSubjects(false);
+    }
+  }
+
+  // Fetch cards for the user and persist to localStorage (per-user and generic)
+  async function fetchAndCacheCards(userId: string, supabaseClient: any) {
+    try {
+      const res = await supabaseClient
+        .from("cards")
+        .select(
+          "id, title, type, content, file_url, due_date, created_at, subject_id, order, mastery_level, last_reviewed_at, next_review_at",
+        )
+        .eq("user_id", userId)
+        .order("order", { ascending: true });
+      const data = (res as any).data || [];
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`comsos:cards:${userId}`, JSON.stringify(data));
+          localStorage.setItem(`comsos:cards`, JSON.stringify(data));
+        }
+      } catch (e) {}
+    } catch (e) {
+      // ignore failures — we don't want to block app load
+      console.error("Failed to fetch cards for cache:", e);
+    }
+  }
+
+  // Fetch uploads for the user and persist to localStorage (per-user and generic)
+  async function fetchAndCacheUploads(userId: string, supabaseClient: any) {
+    try {
+      const res = await supabaseClient
+        .from("uploads")
+        .select(
+          "id, file_name, public_url, storage_path, created_at, subject_id, extracted_text",
+        )
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      const data = (res as any).data || [];
+      const mapped = (data || []).map((r: any) => ({
+        id: r.id,
+        name: r.file_name,
+        publicURL: r.public_url,
+        path: r.storage_path,
+        created_at: r.created_at,
+        subject_id: r.subject_id,
+        content: r.extracted_text || "",
+      }));
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            `comsos:uploads:${userId}`,
+            JSON.stringify(mapped),
+          );
+          localStorage.setItem(`comsos:uploads`, JSON.stringify(mapped));
+        }
+      } catch (e) {}
+    } catch (e) {
+      console.error("Failed to fetch uploads for cache:", e);
+    }
+  }
 
   React.useEffect(() => {
     if (user && user.id) {
       reloadSubjects(user.id, supabase);
-    } else {
+      // also fetch and cache cards and uploads so data is available immediately
+      fetchAndCacheCards(user.id, supabase).catch(() => {});
+      fetchAndCacheUploads(user.id, supabase).catch(() => {});
+    } else if (!userLoading) {
+      // only clear subjects when auth is settled and there's no user
       setSubjects([]);
       setLoadingSubjects(false);
     }
     function onFocus() {
-      window.location.reload();
+      if (user && user.id) {
+        reloadSubjects(user.id, supabase).catch(() => {});
+      }
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible" && user && user.id) {
+        reloadSubjects(user.id, supabase).catch(() => {});
+      }
     }
     window.addEventListener("focus", onFocus);
+    // persist current subjects to localStorage (per-user and generic fallback)
+    try {
+      if (typeof window !== "undefined") {
+        if (user && user.id)
+          localStorage.setItem(
+            `comsos:subjects:${user.id}`,
+            JSON.stringify(subjects),
+          );
+        localStorage.setItem(`comsos:subjects`, JSON.stringify(subjects));
+      }
+    } catch (e) {}
+    document.addEventListener("visibilitychange", onVisibility);
+    function onNavigate(e: any) {
+      try {
+        const p = e?.detail?.pathname;
+        if (!p) return;
+        // reload subjects when navigating to pages that use subjects
+        if (
+          p.startsWith("/subjects") ||
+          p.startsWith("/cards") ||
+          p.startsWith("/resources")
+        ) {
+          if (user && user.id) {
+            reloadSubjects(user.id, supabase).catch(() => {});
+            // also refresh cached cards and uploads so previews and lists are available
+            fetchAndCacheCards(user.id, supabase).catch(() => {});
+            fetchAndCacheUploads(user.id, supabase).catch(() => {});
+          }
+        }
+      } catch (err) {}
+    }
+    window.addEventListener("comsos:navigate", onNavigate as EventListener);
     return () => {
       window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener(
+        "comsos:navigate",
+        onNavigate as EventListener,
+      );
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, userLoading, pathname]);
 
   // Add to context value for use in UI
   return (
