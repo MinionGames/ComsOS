@@ -201,9 +201,12 @@ export default function CardsPage() {
       }
     } catch (e) {}
 
-    // only fetch from DB the first time this page is opened in this session
-    if (!fetchedRef.current && pathname && pathname.startsWith("/cards")) {
-      fetchCards();
+    // Fetch when navigating to /cards. Re-fetch if we haven't fetched yet,
+    // if there are no cards cached, or if a focus/visibility-triggered reload is needed.
+    if (pathname && pathname.startsWith("/cards")) {
+      if (!fetchedRef.current || cards.length === 0 || focusReloadNeeded) {
+        fetchCards();
+      }
     }
     if (typeof window === "undefined") return;
     function onFocus() {
@@ -231,8 +234,9 @@ export default function CardsPage() {
         onNavigate as EventListener,
       );
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, userLoading, pathname]);
+    // include cards length and focusReloadNeeded so navigation back to this
+    // page will trigger fetch when needed
+  }, [user, userLoading, pathname, cards.length, focusReloadNeeded]);
 
   async function handleCreateCard(e: any) {
     e.preventDefault();
