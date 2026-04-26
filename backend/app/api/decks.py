@@ -16,3 +16,21 @@ async def list_decks(user_id: str = Depends(get_current_user)):
         .execute()
     )
     return res.data or []
+
+
+@router.get("/counts")
+async def deck_counts(user_id: str = Depends(get_current_user)):
+    """Return a mapping of subject_id -> number of decks for the authenticated user."""
+    # Fallback: fetch decks for user and aggregate counts in Python
+    # (some supabase clients don't support SQL grouping via the builder)
+    res = (
+        supabase.table("decks").select("subject_id,id").eq("user_id", user_id).execute()
+    )
+    rows = res.data or []
+    counts: dict = {}
+    for row in rows:
+        sid = row.get("subject_id")
+        if sid is None:
+            continue
+        counts[sid] = counts.get(sid, 0) + 1
+    return counts
