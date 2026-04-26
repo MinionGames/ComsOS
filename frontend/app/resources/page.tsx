@@ -2,7 +2,7 @@
 
 import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { api } from "../../lib/api";
 import { useSubjects } from "../../lib/SubjectsContext";
@@ -14,11 +14,12 @@ export default function ResourcesPage() {
   const [files, setFiles] = useState<any[]>([]);
   const fetchedRef = useRef(false);
   const isFetchingRef = useRef(false);
+  const lastFetchTsRef = useRef<number>(0);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingFile, setEditingFile] = useState<any>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingSubject, setEditingSubject] = useState("");
-  const { subjects, loadingSubjects } = useSubjects();
+  const { subjects } = useSubjects();
   const pathname = usePathname();
   const [editingSignedUrl, setEditingSignedUrl] = useState<string | null>(null);
   const [editingSignedUrlError, setEditingSignedUrlError] = useState<
@@ -26,79 +27,63 @@ export default function ResourcesPage() {
   >(null);
   const [isDark, setIsDark] = useState<boolean>(false);
   const [extractedOpen, setExtractedOpen] = useState<boolean>(false);
-  const [generating, setGenerating] = useState<boolean>(false);
+  const [generationState, setGenerationState] = useState<
+    "idle" | "in-progress" | "success" | "error"
+  >("idle");
+  const [generationMessage, setGenerationMessage] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (user) document.title = `Resources | ComsOS`;
   }, [user]);
 
   async function fetchFiles() {
+    // Prevent rapid duplicate fetches (e.g. navigate event + component mount)
+    const now = Date.now();
+    if (now - (lastFetchTsRef.current || 0) < 1500) return;
+    lastFetchTsRef.current = now;
     if (!user) return;
-
-    // show spinner only when no cached files
-    const showSpinner = files.length === 0;
-    if (showSpinner) setUploading(false); // leave uploading state alone
-
     if (isFetchingRef.current) return;
-
-    async function doFetch(attempt = 0) {
-      isFetchingRef.current = true;
-      const start = performance.now();
+    const showSpinner = files.length === 0;
+    if (showSpinner) setUploading(false);
+    isFetchingRef.current = true;
+    try {
+      const data = (await api.uploads.list()) || [];
+      const mapped = (data || []).map((r: any) => ({
+        id: r.id,
+        name: r.file_name,
+        publicURL: r.public_url,
+        path: r.storage_path,
+        created_at: r.created_at,
+        subject_id: r.subject_id,
+        content: r.extracted_text || "",
+        generation_error: r?.metadata?.generation_error || null,
+        processed: r?.processed ?? null,
+      }));
+      setFiles(mapped);
+      // persist cache
       try {
-        const startFetch = performance.now();
-        const data = (await api.uploads.list()) || [];
-        const duration = Math.round(performance.now() - startFetch);
-        const mapped = (data || []).map((r: any) => ({
-          id: r.id,
-          name: r.file_name,
-          publicURL: r.public_url,
-          path: r.storage_path,
-          created_at: r.created_at,
-          subject_id: r.subject_id,
-          content: r.extracted_text || "",
-        }));
-        console.info("Loaded uploads", { count: mapped.length, duration });
-        setFiles(mapped);
-        // If the edit modal is open for a file, sync the editingFile state
-        // with the freshly-fetched record so publicURL and content stay current.
-        try {
-          if (editingFile && editingFile.id) {
-            const updated = mapped.find((m: any) => m.id === editingFile.id);
-            if (updated)
-              setEditingFile((prev: any) => ({
-                ...(prev || {}),
-                ...updated,
-              }));
-          }
-        } catch (e) {}
-        // persist cache (per-user and generic fallback)
-        try {
-          if (typeof window !== "undefined") {
-            if (user?.id)
-              localStorage.setItem(
-                `comsos:uploads:${user.id}`,
-                JSON.stringify(mapped),
-              );
-            localStorage.setItem(`comsos:uploads`, JSON.stringify(mapped));
-          }
-        } catch (e) {}
-        fetchedRef.current = true;
-      } catch (e) {
-        console.error(e);
-        if (showSpinner) setFiles([]);
-      } finally {
-        isFetchingRef.current = false;
-      }
+        if (typeof window !== "undefined") {
+          if (user?.id)
+            localStorage.setItem(
+              `comsos:uploads:${user.id}`,
+              JSON.stringify(mapped),
+            );
+          localStorage.setItem(`comsos:uploads`, JSON.stringify(mapped));
+        }
+      } catch (e) {}
+      fetchedRef.current = true;
+    } catch (e) {
+      console.error("Failed to fetch uploads:", e);
+      if (showSpinner) setFiles([]);
+    } finally {
+      isFetchingRef.current = false;
     }
-
-    await doFetch();
   }
 
   useEffect(() => {
-    // Only fetch when this page is active, or on mount if already on the page
     if (!pathname || !pathname.startsWith("/resources")) return;
-
-    // load cached uploads first (per-user or generic)
     try {
       if (typeof window !== "undefined") {
         let raw: string | null = null;
@@ -109,25 +94,21 @@ export default function ResourcesPage() {
       }
     } catch (e) {}
 
-    // fetch now and whenever the page regains focus/visibility or navigation returns
     if (!fetchedRef.current) fetchFiles();
     if (typeof window === "undefined") return;
-    const onFocus = () => {
-      // always attempt to refresh files when window regains focus
-      fetchFiles();
-    };
+    const onFocus = () => fetchFiles();
     const onVisibility = () => {
       if (document.visibilityState === "visible") fetchFiles();
     };
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVisibility);
-    function onNavigate(e: any) {
+    const onNavigate = (e: any) => {
       try {
         const p = e?.detail?.pathname;
         if (!p) return;
         if (p.startsWith("/resources")) fetchFiles();
       } catch (err) {}
-    }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("comsos:navigate", onNavigate as EventListener);
     return () => {
       window.removeEventListener("focus", onFocus);
@@ -144,7 +125,6 @@ export default function ResourcesPage() {
   useEffect(() => {
     if (!editModalOpen || !editingFile) return;
     let cancelled = false;
-
     async function fetchSignedUrl() {
       setEditingSignedUrl(null);
       setEditingSignedUrlError(null);
@@ -156,14 +136,8 @@ export default function ResourcesPage() {
         if (!cancelled) setEditingSignedUrlError(e?.message || String(e));
       }
     }
-
-    // initial fetch
     fetchSignedUrl();
-
-    // refresh signed URL when returning to the tab or navigating back
-    const onFocus = () => {
-      fetchSignedUrl();
-    };
+    const onFocus = () => fetchSignedUrl();
     const onVisibility = () => {
       if (document.visibilityState === "visible") fetchSignedUrl();
     };
@@ -174,11 +148,9 @@ export default function ResourcesPage() {
         if (p.startsWith("/resources")) fetchSignedUrl();
       } catch (err) {}
     };
-
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("comsos:navigate", onNavigate as EventListener);
-
     return () => {
       cancelled = true;
       window.removeEventListener("focus", onFocus);
@@ -200,9 +172,7 @@ export default function ResourcesPage() {
       // @ts-ignore
       setIsDark(typeof e.matches === "boolean" ? e.matches : mq.matches);
     };
-    // set initial
     setIsDark(mq.matches);
-    // add listener
     if ((mq as any).addEventListener) mq.addEventListener("change", handler);
     else (mq as any).addListener(handler);
     return () => {
@@ -214,9 +184,6 @@ export default function ResourcesPage() {
     };
   }, []);
 
-  // If we're still resolving the auth state, don't blank the UI if we
-  // already have files loaded — show a small loading indicator only
-  // when there are no files yet.
   if (loading && files.length === 0) {
     return (
       <>
@@ -229,7 +196,7 @@ export default function ResourcesPage() {
         >
           <div>Loading...</div>
         </div>
-        {generating && (
+        {generationState !== "idle" && (
           <div
             style={{
               position: "fixed",
@@ -238,7 +205,7 @@ export default function ResourcesPage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              zIndex: 99999,
+              zIndex: 100000,
             }}
           >
             <div
@@ -247,26 +214,60 @@ export default function ResourcesPage() {
                 color: isDark ? "#e6eef8" : "#000",
                 padding: 28,
                 borderRadius: 10,
-                minWidth: 280,
+                minWidth: 320,
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 gap: 12,
               }}
             >
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  border: "5px solid var(--primary, #6366f1)",
-                  borderTop: "5px solid transparent",
-                  borderRadius: "50%",
-                  animation: "spin 1s linear infinite",
-                }}
-              />
-              <div style={{ fontSize: 18, fontWeight: 600 }}>
-                Generating deck…
-              </div>
+              {generationState === "in-progress" && (
+                <>
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      border: "5px solid var(--primary, #6366f1)",
+                      borderTop: "5px solid transparent",
+                      borderRadius: "50%",
+                      animation: "spin 1s linear infinite",
+                    }}
+                  />
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>
+                    Generating deck…
+                  </div>
+                </>
+              )}
+              {generationState === "success" && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ fontSize: 34, color: "#10b981" }}>✓</div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>
+                    {generationMessage || "Deck generated"}
+                  </div>
+                </div>
+              )}
+              {generationState === "error" && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ fontSize: 34, color: "#ef4444" }}>✕</div>
+                  <div style={{ fontSize: 16, fontWeight: 600 }}>
+                    {generationMessage || "Generation failed"}
+                  </div>
+                </div>
+              )}
               <style>{`@keyframes spin {0% { transform: rotate(0deg);}100% { transform: rotate(360deg);} }`}</style>
             </div>
           </div>
@@ -300,40 +301,31 @@ export default function ResourcesPage() {
     }
     setUploading(true);
     try {
-      // Use backend endpoint so the server uploads to Storage and inserts DB row
-      // If not associating with a subject, pass 'null' so backend stores NULL
       const subjectId = "null";
-      // call backend upload helper (it attaches the current session token)
       await api.uploads.upload(subjectId, file);
-      // refresh listing
       await fetchFiles();
-      // use captured input reference to avoid React synthetic event pooling
       input.value = "";
     } catch (err: any) {
       console.error("Upload error:", err);
       alert(
-        err.message ||
-          "Upload failed: network error or server unreachable. Check DevTools Network and backend logs.",
+        err.message || "Upload failed: network error or server unreachable.",
       );
     } finally {
       setUploading(false);
     }
   }
 
-  // Save edits to upload metadata (name and subject)
   async function handleSaveEdit() {
     if (!editingFile) return;
     try {
       const updates: any = {};
       if (editingTitle != null) updates.file_name = editingTitle;
-      // normalize empty string to null for subject
       updates.subject_id = editingSubject || null;
       const updated = await api.uploads.update(editingFile.id, updates);
       if (!updated) {
         alert("Failed to save");
         return;
       }
-      // Update local state list
       setFiles((prev) =>
         prev.map((f) =>
           f.id === editingFile.id
@@ -341,18 +333,17 @@ export default function ResourcesPage() {
                 ...f,
                 name: updated?.file_name ?? editingTitle,
                 subject_id: updated?.subject_id ?? (editingSubject || null),
+                generation_error:
+                  updated?.metadata?.generation_error ?? f.generation_error,
               }
             : f,
         ),
       );
-      // update editingFile object shown in modal
       setEditingFile((prev: any) => ({
         ...(prev || {}),
         name: editingTitle,
         subject_id: editingSubject || null,
       }));
-
-      // update cached localStorage entries
       try {
         if (typeof window !== "undefined") {
           const userKey = user?.id ? `comsos:uploads:${user.id}` : null;
@@ -367,6 +358,9 @@ export default function ResourcesPage() {
                       name: updated?.file_name ?? editingTitle,
                       subject_id:
                         updated?.subject_id ?? (editingSubject || null),
+                      generation_error:
+                        updated?.metadata?.generation_error ??
+                        r?.generation_error,
                     }
                   : r,
               );
@@ -382,6 +376,9 @@ export default function ResourcesPage() {
                     ...r,
                     name: updated?.file_name ?? editingTitle,
                     subject_id: updated?.subject_id ?? (editingSubject || null),
+                    generation_error:
+                      updated?.metadata?.generation_error ??
+                      r?.generation_error,
                   }
                 : r,
             );
@@ -389,7 +386,6 @@ export default function ResourcesPage() {
           }
         }
       } catch (e) {}
-
       setEditModalOpen(false);
     } catch (e: any) {
       console.error(e);
@@ -409,7 +405,6 @@ export default function ResourcesPage() {
 
       <div style={{ marginTop: 20, maxWidth: 700 }}>
         <label style={{ display: "block", marginBottom: 8 }}>Upload PDF</label>
-        {/* Hidden native file input - replaced with custom button */}
         <input
           ref={fileInputRef}
           type="file"
@@ -441,9 +436,6 @@ export default function ResourcesPage() {
             <div style={{ marginTop: 8, color: "#888" }}>Uploading...</div>
           )}
         </div>
-        {uploading && (
-          <div style={{ marginTop: 8, color: "#888" }}>Uploading...</div>
-        )}
 
         <h3 style={{ marginTop: 20, marginBottom: 8 }}>Your Files</h3>
         {files.length === 0 ? (
@@ -490,6 +482,50 @@ export default function ResourcesPage() {
                     >
                       Open
                     </a>
+                  </div>
+                ) : null}
+                {f.generation_error ? (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "#fee2e2",
+                        color: "#991b1b",
+                        padding: "6px 8px",
+                        borderRadius: 6,
+                        fontSize: 13,
+                      }}
+                    >
+                      Generation failed — try again
+                    </div>
+                    <button
+                      onClick={() => {
+                        setEditingFile(f);
+                        setEditingTitle(f.name || "");
+                        setEditingSubject(f.subject_id || "");
+                        setEditingSignedUrl(null);
+                        setEditModalOpen(true);
+                        setGenerationState("idle");
+                        setGenerationMessage(null);
+                      }}
+                      style={{
+                        background: "#ef4444",
+                        color: "#fff",
+                        border: "none",
+                        padding: "6px 8px",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        fontSize: 13,
+                      }}
+                    >
+                      Try again
+                    </button>
                   </div>
                 ) : null}
                 <button
@@ -560,7 +596,7 @@ export default function ResourcesPage() {
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <button
                     onClick={handleSaveEdit}
-                    disabled={!editingFile}
+                    disabled={!editingFile || generationState === "in-progress"}
                     style={{
                       background: "#16a34a",
                       color: "#fff",
@@ -578,24 +614,30 @@ export default function ResourcesPage() {
                       if (!editingFile) return;
                       try {
                         const txt = editingFile.content || "";
-                        setGenerating(true);
+                        setGenerationState("in-progress");
+                        setGenerationMessage(null);
                         const res = await api.ai.generateCards(
                           txt,
                           editingFile.subject_id || undefined,
                           editingTitle || editingFile.name || undefined,
+                          editingFile.id,
                         );
                         console.log("Generated cards:", res);
-                        setGenerating(false);
-                        alert(
-                          `Request complete — generated ${res.cards?.length || 0} cards (see console).`,
+                        setGenerationState("success");
+                        setGenerationMessage(
+                          `Generated ${res.cards?.length || 0} cards.`,
                         );
+                        // refresh listing after generation
+                        await fetchFiles();
+                        // auto-hide success after short delay
+                        setTimeout(() => setGenerationState("idle"), 2500);
                       } catch (err: any) {
                         console.error(err);
-                        setGenerating(false);
-                        alert(
-                          "Card generation failed: " +
-                            (err?.message || String(err)),
+                        setGenerationState("error");
+                        setGenerationMessage(
+                          err && err.message ? err.message : String(err),
                         );
+                        setTimeout(() => setGenerationState("idle"), 4000);
                       }
                     }}
                     style={{
@@ -607,6 +649,7 @@ export default function ResourcesPage() {
                       cursor: editingFile ? "pointer" : "not-allowed",
                       fontWeight: 600,
                     }}
+                    disabled={generationState === "in-progress"}
                   >
                     Generate Cards
                   </button>
@@ -627,6 +670,7 @@ export default function ResourcesPage() {
                   </button>
                 </div>
               </div>
+
               <div
                 style={{
                   marginTop: 12,
@@ -731,6 +775,7 @@ export default function ResourcesPage() {
                       {extractedOpen ? "Hide Extracted" : "Show Extracted"}
                     </button>
                   </div>
+
                   {editingSignedUrl || editingFile?.publicURL ? (
                     <iframe
                       key={
@@ -778,7 +823,7 @@ export default function ResourcesPage() {
                     </div>
                   )}
                 </div>
-                {/* extracted text panel: animated open/closed */}
+
                 <div
                   style={
                     extractedOpen
@@ -835,7 +880,83 @@ export default function ResourcesPage() {
             </div>
           </div>
         )}
-        {/* signed URL loader is handled in useEffect */}
+
+        {generationState !== "idle" && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 100000,
+            }}
+          >
+            <div
+              style={{
+                background: isDark ? "#0b1220" : "#fff",
+                color: isDark ? "#e6eef8" : "#000",
+                padding: 28,
+                borderRadius: 10,
+                minWidth: 320,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              {generationState === "in-progress" && (
+                <>
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      border: "5px solid var(--primary, #6366f1)",
+                      borderTop: "5px solid transparent",
+                      borderRadius: "50%",
+                      animation: "spin 1s linear infinite",
+                    }}
+                  />
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>
+                    Generating deck…
+                  </div>
+                </>
+              )}
+              {generationState === "success" && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ fontSize: 34, color: "#10b981" }}>✓</div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>
+                    {generationMessage || "Deck generated"}
+                  </div>
+                </div>
+              )}
+              {generationState === "error" && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ fontSize: 34, color: "#ef4444" }}>✕</div>
+                  <div style={{ fontSize: 16, fontWeight: 600 }}>
+                    {generationMessage || "Generation failed"}
+                  </div>
+                </div>
+              )}
+              <style>{`@keyframes spin {0% { transform: rotate(0deg);}100% { transform: rotate(360deg);} }`}</style>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

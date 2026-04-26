@@ -48,8 +48,16 @@ export default function SubjectsPage() {
   const [cardCounts, setCardCounts] = useState<{ [subjectId: string]: number }>(
     {},
   );
+  const [deckCounts, setDeckCounts] = useState<{ [subjectId: string]: number }>(
+    {},
+  );
   useEffect(() => {
     if (!user) return;
+
+    const now = Date.now();
+    const lastFetch = (window as any).__comsos_last_subjects_counts_ts || 0;
+    if (now - lastFetch < 1200) return;
+    (window as any).__comsos_last_subjects_counts_ts = now;
 
     // Compute counts from local cache immediately so UI is responsive
     try {
@@ -80,6 +88,16 @@ export default function SubjectsPage() {
       }
     }
     fetchCardCounts();
+    // fetch deck counts as well
+    async function fetchDeckCounts() {
+      try {
+        const dcounts = await api.decks.counts();
+        setDeckCounts(dcounts || {});
+      } catch (e) {
+        // ignore
+      }
+    }
+    fetchDeckCounts();
   }, [user, subjects, focusReloadNeeded]);
 
   // Save new order to Supabase
@@ -245,27 +263,52 @@ export default function SubjectsPage() {
                       {subject.description}
                     </div>
                   )}
-                  {/* Card count box */}
-                  <div
-                    style={{
-                      marginTop: 14,
-                      background: "#232946",
-                      color: "#fff",
-                      borderRadius: 8,
-                      padding: "6px 0",
-                      textAlign: "center",
-                      fontWeight: 600,
-                      fontSize: 15,
-                      boxShadow: "0 1px 4px 0 rgba(0,0,0,0.07)",
-                      width: "100%",
-                      cursor: "pointer",
-                      transition: "background 0.15s, color 0.15s",
-                    }}
-                    title="Show decks for this subject"
-                    onClick={() => router.push(`/decks?subject=${subject.id}`)}
-                  >
-                    {cardCounts[subject.id] || 0} card
-                    {cardCounts[subject.id] === 1 ? "" : "s"}
+                  {/* Counts row: cards + decks */}
+                  <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
+                    <div
+                      style={{
+                        flex: 1,
+                        background: "#232946",
+                        color: "#fff",
+                        borderRadius: 8,
+                        padding: "6px 0",
+                        textAlign: "center",
+                        fontWeight: 600,
+                        fontSize: 15,
+                        boxShadow: "0 1px 4px 0 rgba(0,0,0,0.07)",
+                        cursor: "pointer",
+                        transition: "background 0.15s, color 0.15s",
+                      }}
+                      title="Show cards for this subject"
+                      onClick={() =>
+                        router.push(`/cards?subject=${subject.id}`)
+                      }
+                    >
+                      {cardCounts[subject.id] || 0} card
+                      {cardCounts[subject.id] === 1 ? "" : "s"}
+                    </div>
+                    <div
+                      style={{
+                        width: 120,
+                        background: "#232946",
+                        color: "#fff",
+                        borderRadius: 8,
+                        padding: "6px 0",
+                        textAlign: "center",
+                        fontWeight: 600,
+                        fontSize: 15,
+                        boxShadow: "0 1px 4px 0 rgba(0,0,0,0.07)",
+                        cursor: "pointer",
+                        transition: "background 0.15s, color 0.15s",
+                      }}
+                      title="Show decks for this subject"
+                      onClick={() =>
+                        router.push(`/decks?subject=${subject.id}`)
+                      }
+                    >
+                      {deckCounts[subject.id] || 0} deck
+                      {deckCounts[subject.id] === 1 ? "" : "s"}
+                    </div>
                   </div>
                 </div>
                 {/* Edit button bottom right */}
