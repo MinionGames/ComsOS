@@ -9,11 +9,13 @@ router = APIRouter()
 class SubjectCreate(BaseModel):
     title: str
     color: str = "#6366f1"
+    description: str | None = None
 
 
 class SubjectUpdate(BaseModel):
     title: str | None = None
     color: str | None = None
+    order: int | None = None
 
 
 @router.get("/")
@@ -22,6 +24,7 @@ async def list_subjects(user_id: str = Depends(get_current_user)):
         supabase.table("subjects")
         .select("*")
         .eq("user_id", user_id)
+        .order("order", desc=False)
         .order("created_at", desc=True)
         .execute()
     )

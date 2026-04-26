@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
-import { supabase } from "../../lib/supabaseClient";
+import { api } from "../../lib/api";
 import { useSubjects } from "../../lib/SubjectsContext";
 import { useDraggableList } from "./useDraggableList";
 import { useRouter } from "next/navigation";
@@ -48,8 +48,16 @@ export default function SubjectsPage() {
   const [cardCounts, setCardCounts] = useState<{ [subjectId: string]: number }>(
     {},
   );
+  const [deckCounts, setDeckCounts] = useState<{ [subjectId: string]: number }>(
+    {},
+  );
   useEffect(() => {
     if (!user) return;
+
+    const now = Date.now();
+    const lastFetch = (window as any).__comsos_last_subjects_counts_ts || 0;
+    if (now - lastFetch < 1200) return;
+    (window as any).__comsos_last_subjects_counts_ts = now;
 
     // Compute counts from local cache immediately so UI is responsive
     try {
@@ -72,35 +80,37 @@ export default function SubjectsPage() {
     }
 
     async function fetchCardCounts() {
-      const { data, error } = await supabase
-        .from("cards")
-        .select("id, subject_id")
-        .eq("user_id", user.id);
-      if (!error && data) {
-        const counts: { [subjectId: string]: number } = {};
-        data.forEach((row: any) => {
-          if (row.subject_id) {
-            counts[row.subject_id] = (counts[row.subject_id] || 0) + 1;
-          }
-        });
-        setCardCounts(counts);
+      try {
+        const countsObj = await api.cards.counts();
+        setCardCounts(countsObj || {});
+      } catch (e) {
+        // ignore
       }
     }
     fetchCardCounts();
+    // fetch deck counts as well
+    async function fetchDeckCounts() {
+      try {
+        const dcounts = await api.decks.counts();
+        setDeckCounts(dcounts || {});
+      } catch (e) {
+        // ignore
+      }
+    }
+    fetchDeckCounts();
   }, [user, subjects, focusReloadNeeded]);
 
   // Save new order to Supabase
   async function saveOrderToDatabase(newSubjects: any[]) {
     // Batch update order in Supabase
-    await Promise.all(
-      newSubjects.map((subject, idx) =>
-        supabase
-          .from("subjects")
-          .update({ order: idx + 1 })
-          .eq("id", subject.id),
-      ),
-    );
-    reloadSubjects(user.id, supabase);
+    try {
+      await Promise.all(
+        newSubjects.map((subject, idx) =>
+          api.subjects.update(subject.id, { order: idx + 1 }),
+        ),
+      );
+    } catch (e) {}
+    if (reloadSubjects) await reloadSubjects(user.id);
   }
 
   const { handleDragStart, handleDragEnter, handleDragEnd, isDragging } =
@@ -130,24 +140,13 @@ export default function SubjectsPage() {
     setError("");
     setSuccess("");
     try {
-      const { data, error } = await supabase
-        .from("subjects")
-        .insert([
-          {
-            user_id: user.id,
-            title: subjectName,
-            color: subjectColor,
-            description: subjectDescription,
-          },
-        ])
-        .select();
-      if (error) throw error;
+      await api.subjects.create(subjectName, subjectColor, subjectDescription);
       setSuccess("Subject created!");
       setSubjectName("");
       setSubjectColor("#6366f1");
       setSubjectDescription("");
       setShowModal(false);
-      if (reloadSubjects) await reloadSubjects(user.id, supabase);
+      if (reloadSubjects) await reloadSubjects(user.id);
     } catch (err: any) {
       setError(err.message || "Failed to create subject");
     } finally {
@@ -264,27 +263,52 @@ export default function SubjectsPage() {
                       {subject.description}
                     </div>
                   )}
-                  {/* Card count box */}
-                  <div
-                    style={{
-                      marginTop: 14,
-                      background: "#232946",
-                      color: "#fff",
-                      borderRadius: 8,
-                      padding: "6px 0",
-                      textAlign: "center",
-                      fontWeight: 600,
-                      fontSize: 15,
-                      boxShadow: "0 1px 4px 0 rgba(0,0,0,0.07)",
-                      width: "100%",
-                      cursor: "pointer",
-                      transition: "background 0.15s, color 0.15s",
-                    }}
-                    title="Show decks for this subject"
-                    onClick={() => router.push(`/decks?subject=${subject.id}`)}
-                  >
-                    {cardCounts[subject.id] || 0} card
-                    {cardCounts[subject.id] === 1 ? "" : "s"}
+                  {/* Counts row: cards + decks */}
+                  <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
+                    <div
+                      style={{
+                        flex: 1,
+                        background: "#232946",
+                        color: "#fff",
+                        borderRadius: 8,
+                        padding: "6px 0",
+                        textAlign: "center",
+                        fontWeight: 600,
+                        fontSize: 15,
+                        boxShadow: "0 1px 4px 0 rgba(0,0,0,0.07)",
+                        cursor: "pointer",
+                        transition: "background 0.15s, color 0.15s",
+                      }}
+                      title="Show cards for this subject"
+                      onClick={() =>
+                        router.push(`/cards?subject=${subject.id}`)
+                      }
+                    >
+                      {cardCounts[subject.id] || 0} card
+                      {cardCounts[subject.id] === 1 ? "" : "s"}
+                    </div>
+                    <div
+                      style={{
+                        width: 120,
+                        background: "#232946",
+                        color: "#fff",
+                        borderRadius: 8,
+                        padding: "6px 0",
+                        textAlign: "center",
+                        fontWeight: 600,
+                        fontSize: 15,
+                        boxShadow: "0 1px 4px 0 rgba(0,0,0,0.07)",
+                        cursor: "pointer",
+                        transition: "background 0.15s, color 0.15s",
+                      }}
+                      title="Show decks for this subject"
+                      onClick={() =>
+                        router.push(`/decks?subject=${subject.id}`)
+                      }
+                    >
+                      {deckCounts[subject.id] || 0} deck
+                      {deckCounts[subject.id] === 1 ? "" : "s"}
+                    </div>
                   </div>
                 </div>
                 {/* Edit button bottom right */}
@@ -361,20 +385,17 @@ export default function SubjectsPage() {
                       setEditError("");
                       setEditSuccess("");
                       try {
-                        const { error } = await supabase
-                          .from("subjects")
-                          .update({
+                        try {
+                          await api.subjects.update(editModal.id, {
                             title: editName,
                             color: editColor,
                             description: editDescription,
-                          })
-                          .eq("id", editModal.id);
-                        if (error) {
-                          setEditError(error.message);
-                        } else {
+                          });
                           setEditSuccess("Subject updated!");
                           setTimeout(() => setEditModal(null), 700);
-                          reloadSubjects(user.id, supabase);
+                          reloadSubjects(user.id);
+                        } catch (e: any) {
+                          setEditError(e?.message || "Update failed");
                         }
                       } catch (err: any) {
                         setEditError(err.message || "Unknown error");
