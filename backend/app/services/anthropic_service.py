@@ -59,8 +59,44 @@ def _extract_text_from_response(data: dict) -> str:
     return str(data)
 
 
+def _coerce_sdk_response_to_text(resp: object) -> str:
+    """Try to extract a plain text string from various Anthropic SDK response objects."""
+    # If it's already a string
+    if isinstance(resp, str):
+        return resp
+
+    # Some SDKs return an object with `.content` which is a list of TextBlock-like objects
+    content = getattr(resp, "content", None)
+    if content:
+        # content may be a list of blocks
+        if isinstance(content, (list, tuple)) and len(content) > 0:
+            first = content[0]
+            # TextBlock may have `.text` or `.content` property
+            text = getattr(first, "text", None) or getattr(first, "content", None)
+            if text is not None:
+                return text
+            # fallback: stringify the block
+            return str(first)
+        # if content is a plain string
+        if isinstance(content, str):
+            return content
+
+    # Some SDK responses embed the message under `.message` or `.completion`
+    if hasattr(resp, "message"):
+        msg = getattr(resp, "message")
+        if isinstance(msg, dict):
+            return _extract_text_from_response(msg)
+        return str(msg)
+
+    if hasattr(resp, "completion"):
+        return str(getattr(resp, "completion"))
+
+    # last resort
+    return str(resp)
+
+
 class ClaudeService:
-    def __init__(self, api_key: str, default_model: str = "claude-opus-4-7"):
+    def __init__(self, api_key: str, default_model: str = "claude-haiku-4-5-20251001"):
         self.api_key = api_key
         self.default_model = default_model
 
@@ -86,18 +122,13 @@ class ClaudeService:
                             messages=[{"role": "user", "content": prompt}],
                             max_tokens=max_tokens,
                         )
-                        # attempt to extract text
+                        # attempt to extract text from SDK message object
+                        text = _coerce_sdk_response_to_text(resp)
+                        if isinstance(text, str):
+                            return text
+                        # fallback to dict extractor
                         if isinstance(resp, dict):
                             return _extract_text_from_response(resp)
-                        if hasattr(resp, "message"):
-                            msg = getattr(resp, "message")
-                            return (
-                                _extract_text_from_response(msg)
-                                if isinstance(msg, dict)
-                                else str(msg)
-                            )
-                        if hasattr(resp, "completion"):
-                            return getattr(resp, "completion")
                         return str(resp)
                     except Exception as e:
                         logger.exception("Anthropic SDK messages.create failed")
@@ -113,10 +144,12 @@ class ClaudeService:
                             prompt=prompt,
                             max_tokens_to_sample=max_tokens,
                         )
+                        # try to coerce SDK response
+                        text = _coerce_sdk_response_to_text(resp)
+                        if isinstance(text, str):
+                            return text
                         if isinstance(resp, dict):
                             return _extract_text_from_response(resp)
-                        if hasattr(resp, "completion"):
-                            return getattr(resp, "completion")
                         return str(resp)
                     except Exception as e:
                         logger.exception("Anthropic SDK completions.create failed")

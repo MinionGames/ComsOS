@@ -88,17 +88,17 @@ export default function Sidebar() {
           Subjects
         </Link>
         <Link
-          href="/cards"
+          href="/decks"
           style={navLinkStyle}
           onClick={() =>
             window.dispatchEvent(
               new CustomEvent("comsos:navigate", {
-                detail: { pathname: "/cards" },
+                detail: { pathname: "/decks" },
               }),
             )
           }
         >
-          Cards
+          Decks
         </Link>
         <Link
           href="/resources"

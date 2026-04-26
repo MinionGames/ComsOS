@@ -571,6 +571,44 @@ export default function ResourcesPage() {
                     Save
                   </button>
                   <button
+                    onClick={async () => {
+                      if (!editingFile) return;
+                      try {
+                        const txt = editingFile.content || "";
+                        // simple confirmation
+                        const proceed = confirm(
+                          "Send extracted text to generate flashcards?",
+                        );
+                        if (!proceed) return;
+                        const res = await api.ai.generateCards(
+                          txt,
+                          editingFile.subject_id || undefined,
+                        );
+                        console.log("Generated cards:", res);
+                        alert(
+                          `Request complete — generated ${res.cards?.length || 0} cards (see console).`,
+                        );
+                      } catch (err: any) {
+                        console.error(err);
+                        alert(
+                          "Card generation failed: " +
+                            (err?.message || String(err)),
+                        );
+                      }
+                    }}
+                    style={{
+                      background: "#0ea5a4",
+                      color: "#fff",
+                      border: "none",
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      cursor: editingFile ? "pointer" : "not-allowed",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Generate Cards
+                  </button>
+                  <button
                     onClick={() => {
                       setEditModalOpen(false);
                       setEditingFile(null);
