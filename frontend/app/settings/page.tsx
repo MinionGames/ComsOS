@@ -3,7 +3,7 @@
 import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
-import { useSupabaseProfileSync } from "../../lib/useSupabaseProfileSync";
+// no direct supabase auth fetch here — UserContext handles session lifecycle
 import { useState, useEffect } from "react";
 
 const SettingsPage = () => {
@@ -115,7 +115,7 @@ const SettingsPage = () => {
       </section>
 
       <section style={{ marginTop: "24px", maxWidth: "600px" }}>
-        <h2 style={{ marginBottom: "12px" }}>Cards</h2>
+        <h2 style={{ marginBottom: "12px" }}>Decks</h2>
         <label style={{ display: "block", marginBottom: 12 }}>
           Show card dates as
         </label>
