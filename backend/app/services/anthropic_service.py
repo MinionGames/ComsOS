@@ -2,7 +2,7 @@ from app.config import settings
 import httpx
 import logging
 from typing import Any, Dict, Optional
-from starlette.concurrency import run_in_threadpool
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ class ClaudeService:
                     "Installed Anthropic SDK does not expose messages or completions APIs"
                 )
 
-            return await run_in_threadpool(_sdk_call)
+            return await asyncio.to_thread(_sdk_call)
 
         # HTTP path
         headers = {
@@ -186,7 +186,7 @@ class ClaudeService:
                     "Installed Anthropic SDK does not expose a models listing API"
                 )
 
-            return await run_in_threadpool(_sdk_call)
+            return await asyncio.to_thread(_sdk_call)
 
         url = "https://api.anthropic.com/v1/models"
         headers = {
@@ -219,46 +219,4 @@ async def list_models() -> Any:
     return await claude.list_models()
 
 
-async def list_models() -> Any:
-    """Return available models for the configured API key.
-
-    Uses the installed SDK when available, otherwise falls back to an HTTP GET.
-    """
-    if not settings.anthropic_api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is not configured in environment")
-
-    # SDK path
-    if anthropic is not None:
-        client = anthropic.Client(api_key=settings.anthropic_api_key)
-
-        def _sdk_call():
-            # different SDK versions expose models list differently
-            if hasattr(client, "models") and hasattr(client.models, "list"):
-                return client.models.list()
-            if hasattr(client, "models"):
-                try:
-                    return client.models()
-                except Exception:
-                    pass
-            # some SDKs offer a raw request helper
-            if hasattr(client, "request"):
-                return client.request("GET", "/v1/models")
-            raise RuntimeError(
-                "Installed Anthropic SDK does not expose a models listing API"
-            )
-
-        return await run_in_threadpool(_sdk_call)
-
-    # HTTP fallback
-    url = "https://api.anthropic.com/v1/models"
-    headers = {
-        "Authorization": f"Bearer {settings.anthropic_api_key}",
-        "Content-Type": "application/json",
-    }
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.get(url, headers=headers)
-
-    if resp.status_code >= 400:
-        raise RuntimeError(f"Error code: {resp.status_code} - {resp.text}")
-
-    return resp.json()
+# note: module-level wrappers `complete` and `list_models` above call `claude` directly
