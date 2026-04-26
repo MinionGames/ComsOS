@@ -92,6 +92,50 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/")
+async def list_uploads(user_id: str = Depends(get_current_user)):
+    try:
+        res = (
+            supabase.table("uploads")
+            .select(
+                "id, file_name, public_url, storage_path, created_at, subject_id, extracted_text"
+            )
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return res.data or []
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{upload_id}")
+async def update_upload(
+    upload_id: str, payload: dict, user_id: str = Depends(get_current_user)
+):
+    try:
+        # Only allow updating certain fields
+        allowed = {"file_name", "subject_id", "metadata"}
+        updates = {k: v for k, v in payload.items() if k in allowed}
+        if not updates:
+            return {"ok": False, "error": "nothing to update"}
+        res = (
+            supabase.table("uploads")
+            .update(updates)
+            .eq("id", upload_id)
+            .eq("user_id", user_id)
+            .select()
+            .execute()
+        )
+        return res.data and res.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/download/{upload_id}")
 async def get_signed_download_url(
     upload_id: str, user_id: str = Depends(get_current_user)

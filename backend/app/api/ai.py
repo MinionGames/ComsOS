@@ -5,6 +5,9 @@ from app.services.anthropic_service import complete
 from app.config import settings
 from app.services.anthropic_service import list_models
 from app.services.card_generator import generate_cards_from_text
+from app.services.anthropic_service import ClaudeServiceError
+import httpx
+import asyncio
 from app.api.auth import get_current_user
 from app.db.client import supabase
 import logging
@@ -24,6 +27,10 @@ class GenerateCardsRequest(BaseModel):
     extracted_text: str
     # pass subject_id (or leave null) to associate cards with a subject
     subject_name: Optional[str] = None
+    # optional title for the deck created from this source
+    deck_title: Optional[str] = None
+    # optional upload id to mark upload status on failure
+    upload_id: Optional[str] = None
     model: Optional[str] = None
 
 
@@ -68,9 +75,58 @@ async def generate_cards(
     req: GenerateCardsRequest, user_id: str = Depends(get_current_user)
 ):
     try:
-        cards = await generate_cards_from_text(
-            req.extracted_text, subject_name=req.subject_name or "", model=req.model
-        )
+        try:
+            cards = await generate_cards_from_text(
+                req.extracted_text, subject_name=req.subject_name or "", model=req.model
+            )
+        except (
+            ValueError,
+            ClaudeServiceError,
+            httpx.RequestError,
+            httpx.TimeoutException,
+            asyncio.TimeoutError,
+        ) as gen_err:
+            # Model returned malformed output or call timed out — log and mark upload failed if provided
+            logger.exception("AI generation failed: %s", gen_err)
+            if getattr(req, "upload_id", None):
+                try:
+                    supabase.table("uploads").update(
+                        {
+                            "processed": False,
+                            "metadata": {
+                                "generation_status": "failed",
+                                "generation_error": str(gen_err)[:4000],
+                            },
+                        }
+                    ).eq("id", req.upload_id).eq("user_id", user_id).execute()
+                except Exception:
+                    logger.exception(
+                        "Failed to mark upload as failed for upload_id=%s",
+                        req.upload_id,
+                    )
+
+            # Return a user-friendly error
+            raise HTTPException(
+                status_code=502,
+                detail="AI generation failed: the model returned invalid output or the request timed out — try again later.",
+            )
+
+        # create a deck row for this generated set
+        deck_title = (req.deck_title or "").strip() or None
+        deck_id = None
+        if deck_title:
+            try:
+                deck_res = (
+                    supabase.table("decks")
+                    .insert({"user_id": user_id, "deck_name": deck_title})
+                    .execute()
+                )
+                deck_data = getattr(deck_res, "data", None) or None
+                if deck_data and len(deck_data) > 0:
+                    deck_id = deck_data[0].get("id")
+            except Exception as e:
+                logger.exception("Failed to create deck row")
+                # continue without deck_id if deck creation fails
 
         # prepare records for bulk insert
         subject_id = req.subject_name or None
@@ -90,6 +146,7 @@ async def generate_cards(
                     "difficulty": c.get("difficulty") or "medium",
                     "card_type": c.get("card_type") or "definition",
                     "subject_id": subject_id,
+                    "deck_id": deck_id,
                 }
             )
 

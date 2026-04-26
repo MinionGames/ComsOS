@@ -15,6 +15,38 @@ async function apiFetch(path: string, options: RequestInit = {}) {
   return res.json();
 }
 
+// Small in-memory cache + in-flight coalescing to coalesce rapid duplicate requests
+const _cache = new Map<string, { ts: number; ttl: number; value: any }>();
+const _inflight = new Map<string, Promise<any>>();
+async function cachedApiFetch(
+  path: string,
+  options: RequestInit = {},
+  ttl = 3000,
+) {
+  const key =
+    path + (options && options.method ? `|${options.method}` : "|GET");
+  const now = Date.now();
+  const existing = _cache.get(key);
+  if (existing && now - existing.ts < existing.ttl) return existing.value;
+  // If a request for this key is already in flight, reuse its promise
+  const inflight = _inflight.get(key);
+  if (inflight) return inflight;
+  const p = (async () => {
+    try {
+      const v = await apiFetch(path, options);
+      try {
+        _cache.set(key, { ts: Date.now(), ttl, value: v });
+      } catch (e) {}
+      return v;
+    } finally {
+      // clear inflight regardless of success or failure
+      _inflight.delete(key);
+    }
+  })();
+  _inflight.set(key, p);
+  return p;
+}
+
 export const api = {
   auth: {
     login: (email: string, password: string) =>
@@ -30,12 +62,25 @@ export const api = {
   },
   subjects: {
     list: () => apiFetch("/subjects/"),
-    create: (title: string, color: string) =>
+    create: (title: string, color: string, description?: string) =>
       apiFetch("/subjects/", {
         method: "POST",
-        body: JSON.stringify({ title, color }),
+        body: JSON.stringify({ title, color, description }),
+      }),
+    update: (id: string, updates: any) =>
+      apiFetch(`/subjects/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
       }),
     delete: (id: string) => apiFetch(`/subjects/${id}`, { method: "DELETE" }),
+  },
+  cards: {
+    list: () => cachedApiFetch("/cards/", {}, 2000),
+    counts: () => cachedApiFetch("/cards/counts", {}, 2000),
+  },
+  decks: {
+    list: () => cachedApiFetch("/decks/", {}, 2000),
+    counts: () => cachedApiFetch("/decks/counts", {}, 2000),
   },
   notes: {
     list: (subjectId: string) => apiFetch(`/notes/?subject_id=${subjectId}`),
@@ -54,14 +99,23 @@ export const api = {
     generateCards: (
       extracted_text: string,
       subject_name?: string,
+      deck_title?: string,
+      upload_id?: string | number,
       model?: string,
     ) =>
       apiFetch("/ai/generate-cards", {
         method: "POST",
-        body: JSON.stringify({ extracted_text, subject_name, model }),
+        body: JSON.stringify({
+          extracted_text,
+          subject_name,
+          deck_title,
+          upload_id,
+          model,
+        }),
       }),
   },
   uploads: {
+    list: () => cachedApiFetch("/uploads/", {}, 2000),
     upload: async (subjectId: string, file: File) => {
       const form = new FormData();
       form.append("file", file);
@@ -159,5 +213,10 @@ export const api = {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
+    update: (uploadId: string | number, updates: any) =>
+      apiFetch(`/uploads/${uploadId}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      }),
   },
 };
