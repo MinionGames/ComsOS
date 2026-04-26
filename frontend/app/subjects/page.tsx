@@ -280,8 +280,8 @@ export default function SubjectsPage() {
                       cursor: "pointer",
                       transition: "background 0.15s, color 0.15s",
                     }}
-                    title="Show cards for this subject"
-                    onClick={() => router.push(`/cards?subject=${subject.id}`)}
+                    title="Show decks for this subject"
+                    onClick={() => router.push(`/decks?subject=${subject.id}`)}
                   >
                     {cardCounts[subject.id] || 0} card
                     {cardCounts[subject.id] === 1 ? "" : "s"}

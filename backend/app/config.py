@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     jwt_secret: str
     storage_bucket: str = "comsos-uploads"
     anthropic_api_key: str = "[REDACTED_ANTHROPIC_API_KEY_1]"
-    anthropic_default_model: str = "claude-opus-4-7"
+    anthropic_default_model: str = "claude-haiku-4-5-20251001"
 
     class Config:
         env_file = ".env"
