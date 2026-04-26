@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     supabase_anon_key: str = "[REDACTED_SUPABASE_ANON_KEY]"
     jwt_secret: str
     storage_bucket: str = "comsos-uploads"
+    anthropic_api_key: str = "[REDACTED_ANTHROPIC_API_KEY_1]"
+    anthropic_default_model: str = "claude-opus-4-7"
 
     class Config:
         env_file = ".env"
