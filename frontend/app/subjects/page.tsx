@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
-import { supabase } from "../../lib/supabaseClient";
+import { api } from "../../lib/api";
 import { useSubjects } from "../../lib/SubjectsContext";
 import { useDraggableList } from "./useDraggableList";
 import { useRouter } from "next/navigation";
@@ -72,18 +72,11 @@ export default function SubjectsPage() {
     }
 
     async function fetchCardCounts() {
-      const { data, error } = await supabase
-        .from("cards")
-        .select("id, subject_id")
-        .eq("user_id", user.id);
-      if (!error && data) {
-        const counts: { [subjectId: string]: number } = {};
-        data.forEach((row: any) => {
-          if (row.subject_id) {
-            counts[row.subject_id] = (counts[row.subject_id] || 0) + 1;
-          }
-        });
-        setCardCounts(counts);
+      try {
+        const countsObj = await api.cards.counts();
+        setCardCounts(countsObj || {});
+      } catch (e) {
+        // ignore
       }
     }
     fetchCardCounts();
@@ -92,15 +85,14 @@ export default function SubjectsPage() {
   // Save new order to Supabase
   async function saveOrderToDatabase(newSubjects: any[]) {
     // Batch update order in Supabase
-    await Promise.all(
-      newSubjects.map((subject, idx) =>
-        supabase
-          .from("subjects")
-          .update({ order: idx + 1 })
-          .eq("id", subject.id),
-      ),
-    );
-    reloadSubjects(user.id, supabase);
+    try {
+      await Promise.all(
+        newSubjects.map((subject, idx) =>
+          api.subjects.update(subject.id, { order: idx + 1 }),
+        ),
+      );
+    } catch (e) {}
+    if (reloadSubjects) await reloadSubjects(user.id);
   }
 
   const { handleDragStart, handleDragEnter, handleDragEnd, isDragging } =
@@ -130,24 +122,13 @@ export default function SubjectsPage() {
     setError("");
     setSuccess("");
     try {
-      const { data, error } = await supabase
-        .from("subjects")
-        .insert([
-          {
-            user_id: user.id,
-            title: subjectName,
-            color: subjectColor,
-            description: subjectDescription,
-          },
-        ])
-        .select();
-      if (error) throw error;
+      await api.subjects.create(subjectName, subjectColor, subjectDescription);
       setSuccess("Subject created!");
       setSubjectName("");
       setSubjectColor("#6366f1");
       setSubjectDescription("");
       setShowModal(false);
-      if (reloadSubjects) await reloadSubjects(user.id, supabase);
+      if (reloadSubjects) await reloadSubjects(user.id);
     } catch (err: any) {
       setError(err.message || "Failed to create subject");
     } finally {
@@ -361,20 +342,17 @@ export default function SubjectsPage() {
                       setEditError("");
                       setEditSuccess("");
                       try {
-                        const { error } = await supabase
-                          .from("subjects")
-                          .update({
+                        try {
+                          await api.subjects.update(editModal.id, {
                             title: editName,
                             color: editColor,
                             description: editDescription,
-                          })
-                          .eq("id", editModal.id);
-                        if (error) {
-                          setEditError(error.message);
-                        } else {
+                          });
                           setEditSuccess("Subject updated!");
                           setTimeout(() => setEditModal(null), 700);
-                          reloadSubjects(user.id, supabase);
+                          reloadSubjects(user.id);
+                        } catch (e: any) {
+                          setEditError(e?.message || "Update failed");
                         }
                       } catch (err: any) {
                         setEditError(err.message || "Unknown error");

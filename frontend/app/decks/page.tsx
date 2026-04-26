@@ -1,7 +1,6 @@
 "use client";
 import React, { useEffect, useState, useRef } from "react";
 import { useUser } from "../../lib/UserContext";
-import { supabase } from "../../lib/supabaseClient";
 
 export default function DecksPage() {
   const { user, loading: userLoading } = useUser();
