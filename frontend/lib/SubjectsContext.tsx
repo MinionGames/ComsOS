@@ -30,7 +30,7 @@ const SubjectsContext = createContext<SubjectsContextType | undefined>(
 
 import { useUser } from "./UserContext";
 import { usePathname } from "next/navigation";
-import { supabase } from "./supabaseClient";
+import { api } from "./api";
 
 export const SubjectsProvider = ({
   children,
@@ -47,17 +47,12 @@ export const SubjectsProvider = ({
 
   // Reload subjects; keep the existing list visible while refreshing
   // by only showing the loading state when there are no subjects yet.
-  async function reloadSubjects(userId: string, supabaseClient: any) {
+  async function reloadSubjects(userId: string) {
     const showLoading = subjects.length === 0;
     try {
       if (showLoading) setLoadingSubjects(true);
-      const { data, error } = await supabaseClient
-        .from("subjects")
-        .select("id, title, color, description, order")
-        .eq("user_id", userId)
-        .order("order", { ascending: true });
-      if (!error) setSubjects(data || []);
-      else setSubjects([]);
+      const data = await api.subjects.list();
+      setSubjects(data || []);
     } catch (e) {
       setSubjects([]);
     } finally {
@@ -66,16 +61,9 @@ export const SubjectsProvider = ({
   }
 
   // Fetch cards for the user and persist to localStorage (per-user and generic)
-  async function fetchAndCacheCards(userId: string, supabaseClient: any) {
+  async function fetchAndCacheCards(userId: string) {
     try {
-      const res = await supabaseClient
-        .from("cards")
-        .select(
-          "id, front, back, file_url, due_date, created_at, subject_id, order, mastery_level, last_reviewed_at, next_review_at",
-        )
-        .eq("user_id", userId)
-        .order("order", { ascending: true });
-      const data = (res as any).data || [];
+      const data = (await api.cards.list()) || [];
       // normalize front/back -> title/content for local cache
       const normalized = (data || []).map((r: any) => ({
         ...r,
@@ -98,17 +86,9 @@ export const SubjectsProvider = ({
   }
 
   // Fetch uploads for the user and persist to localStorage (per-user and generic)
-  async function fetchAndCacheUploads(userId: string, supabaseClient: any) {
+  async function fetchAndCacheUploads(userId: string) {
     try {
-      const res = await supabaseClient
-        .from("uploads")
-        .select(
-          "id, file_name, public_url, storage_path, created_at, subject_id, extracted_text",
-        )
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(200);
-      const data = (res as any).data || [];
+      const data = (await api.uploads.list()) || [];
       const mapped = (data || []).map((r: any) => ({
         id: r.id,
         name: r.file_name,
@@ -139,10 +119,10 @@ export const SubjectsProvider = ({
       // defer fetches to avoid competing auth localStorage lock in StrictMode
       const t = window.setTimeout(() => {
         if (!mountedRef.current) return;
-        reloadSubjects(user.id, supabase);
+        reloadSubjects(user.id);
         // also fetch and cache cards and uploads so data is available immediately
-        fetchAndCacheCards(user.id, supabase).catch(() => {});
-        fetchAndCacheUploads(user.id, supabase).catch(() => {});
+        fetchAndCacheCards(user.id).catch(() => {});
+        fetchAndCacheUploads(user.id).catch(() => {});
       }, 0);
       // cleanup timer if unmounting
       // store timer id on ref so we can clear in return
@@ -167,12 +147,12 @@ export const SubjectsProvider = ({
 
     function onFocus() {
       if (user && user.id) {
-        schedule(() => reloadSubjects(user.id, supabase).catch(() => {}));
+        schedule(() => reloadSubjects(user.id).catch(() => {}));
       }
     }
     function onVisibility() {
       if (document.visibilityState === "visible" && user && user.id) {
-        schedule(() => reloadSubjects(user.id, supabase).catch(() => {}));
+        schedule(() => reloadSubjects(user.id).catch(() => {}));
       }
     }
     window.addEventListener("focus", onFocus);
@@ -199,14 +179,10 @@ export const SubjectsProvider = ({
           p.startsWith("/resources")
         ) {
           if (user && user.id) {
-            schedule(() => reloadSubjects(user.id, supabase).catch(() => {}));
+            schedule(() => reloadSubjects(user.id).catch(() => {}));
             // also refresh cached cards and uploads so previews and lists are available
-            schedule(() =>
-              fetchAndCacheCards(user.id, supabase).catch(() => {}),
-            );
-            schedule(() =>
-              fetchAndCacheUploads(user.id, supabase).catch(() => {}),
-            );
+            schedule(() => fetchAndCacheCards(user.id).catch(() => {}));
+            schedule(() => fetchAndCacheUploads(user.id).catch(() => {}));
           }
         }
       } catch (err) {}

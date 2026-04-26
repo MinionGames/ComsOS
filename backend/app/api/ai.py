@@ -24,6 +24,8 @@ class GenerateCardsRequest(BaseModel):
     extracted_text: str
     # pass subject_id (or leave null) to associate cards with a subject
     subject_name: Optional[str] = None
+    # optional title for the deck created from this source
+    deck_title: Optional[str] = None
     model: Optional[str] = None
 
 
@@ -72,6 +74,23 @@ async def generate_cards(
             req.extracted_text, subject_name=req.subject_name or "", model=req.model
         )
 
+        # create a deck row for this generated set
+        deck_title = (req.deck_title or "").strip() or None
+        deck_id = None
+        if deck_title:
+            try:
+                deck_res = (
+                    supabase.table("decks")
+                    .insert({"user_id": user_id, "deck_name": deck_title})
+                    .execute()
+                )
+                deck_data = getattr(deck_res, "data", None) or None
+                if deck_data and len(deck_data) > 0:
+                    deck_id = deck_data[0].get("id")
+            except Exception as e:
+                logger.exception("Failed to create deck row")
+                # continue without deck_id if deck creation fails
+
         # prepare records for bulk insert
         subject_id = req.subject_name or None
         records = []
@@ -90,6 +109,7 @@ async def generate_cards(
                     "difficulty": c.get("difficulty") or "medium",
                     "card_type": c.get("card_type") or "definition",
                     "subject_id": subject_id,
+                    "deck_id": deck_id,
                 }
             )
 

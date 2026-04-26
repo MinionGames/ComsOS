@@ -4,6 +4,7 @@ from app.api import auth, subjects, notes, uploads
 from app.api.debug import router as debug_router
 from app.api import ai as ai_api
 from app.api import decks as decks_api
+from app.api import cards as cards_api
 
 app = FastAPI(title="ComsOS API")
 
@@ -25,6 +26,7 @@ app.include_router(subjects.router, prefix="/subjects", tags=["subjects"])
 app.include_router(notes.router, prefix="/notes", tags=["notes"])
 app.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
 app.include_router(decks_api.router, prefix="/decks", tags=["decks"])
+app.include_router(cards_api.router, prefix="/cards", tags=["cards"])
 
 app.include_router(debug_router, prefix="/debug", tags=["debug"])
 app.include_router(ai_api.router, prefix="/ai", tags=["ai"])

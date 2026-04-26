@@ -27,43 +27,66 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let ignore = false;
     supabase.auth.getSession().then(async ({ data }) => {
-      if (!ignore) {
-        setUser(data.session?.user ?? null);
-        // persist access token for backend API
+      if (ignore) return;
+      // If supabase has an in-memory session, use it and persist token
+      if (data?.session?.user) {
+        const sessUser = data.session.user;
+        setUser(sessUser);
         try {
           const tok =
             (data.session as any)?.access_token ??
             (data.session as any)?.accessToken;
-          if (tok) {
-            window.localStorage.setItem("access_token", tok as string);
-            // ping backend to confirm server recognizes this token
-            try {
-              const res = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/auth/me`,
-                {
-                  headers: { Authorization: `Bearer ${tok}` },
-                },
-              );
-              if (!res.ok) {
-                console.warn("Backend /auth/me responded", res.status);
-              }
-            } catch (e) {
-              // ignore
-            }
-          }
-        } catch (e) {
-          // ignore
-        }
+          if (tok) window.localStorage.setItem("access_token", tok as string);
+        } catch (e) {}
+        // ensure profile exists
+        const profile = await getOrCreateUserProfile({
+          id: sessUser.id,
+          email: sessUser.email ?? "",
+        });
+        setProfile(profile);
         setLoading(false);
-        if (data.session?.user) {
-          const profile = await getOrCreateUserProfile({
-            id: data.session.user.id,
-            email: data.session.user.email ?? "", // fallback to empty string
-          });
-          setProfile(profile);
-        } else {
-          setProfile(null);
+        return;
+      }
+
+      // No in-memory session: fall back to stored access_token and backend /auth/me
+      try {
+        const tok = window.localStorage.getItem("access_token");
+        if (tok) {
+          // validate with backend and load profile
+          try {
+            const res = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/auth/me`,
+              { headers: { Authorization: `Bearer ${tok}` } },
+            );
+            if (res.ok) {
+              const j = await res.json();
+              const uid = j?.user?.id ?? null;
+              const prof = j?.profile ?? null;
+              if (uid) {
+                setUser({ id: uid, email: prof?.email ?? undefined });
+                setProfile(prof);
+                setLoading(false);
+                return;
+              }
+            } else {
+              // token invalid -> remove
+              try {
+                window.localStorage.removeItem("access_token");
+              } catch (e) {}
+            }
+          } catch (e) {
+            // ignore network/backend errors and fall through to no-user
+          }
         }
+      } catch (e) {
+        // localStorage may be unavailable
+      }
+
+      // No session available
+      if (!ignore) {
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
       }
     });
     const { data: listener } = supabase.auth.onAuthStateChange(

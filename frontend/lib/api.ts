@@ -30,12 +30,21 @@ export const api = {
   },
   subjects: {
     list: () => apiFetch("/subjects/"),
-    create: (title: string, color: string) =>
+    create: (title: string, color: string, description?: string) =>
       apiFetch("/subjects/", {
         method: "POST",
-        body: JSON.stringify({ title, color }),
+        body: JSON.stringify({ title, color, description }),
+      }),
+    update: (id: string, updates: any) =>
+      apiFetch(`/subjects/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
       }),
     delete: (id: string) => apiFetch(`/subjects/${id}`, { method: "DELETE" }),
+  },
+  cards: {
+    list: () => apiFetch("/cards/"),
+    counts: () => apiFetch("/cards/counts"),
   },
   notes: {
     list: (subjectId: string) => apiFetch(`/notes/?subject_id=${subjectId}`),
@@ -54,14 +63,21 @@ export const api = {
     generateCards: (
       extracted_text: string,
       subject_name?: string,
+      deck_title?: string,
       model?: string,
     ) =>
       apiFetch("/ai/generate-cards", {
         method: "POST",
-        body: JSON.stringify({ extracted_text, subject_name, model }),
+        body: JSON.stringify({
+          extracted_text,
+          subject_name,
+          deck_title,
+          model,
+        }),
       }),
   },
   uploads: {
+    list: () => apiFetch("/uploads/"),
     upload: async (subjectId: string, file: File) => {
       const form = new FormData();
       form.append("file", file);
@@ -159,5 +175,10 @@ export const api = {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
+    update: (uploadId: string | number, updates: any) =>
+      apiFetch(`/uploads/${uploadId}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      }),
   },
 };
