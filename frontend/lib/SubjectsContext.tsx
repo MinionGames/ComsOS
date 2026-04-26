@@ -43,11 +43,16 @@ export const SubjectsProvider = ({
   const { user, loading: userLoading } = useUser();
   const pathname = usePathname();
   const mountedRef = useRef(true);
+  const lastReloadTsRef = useRef<number>(0);
   const timersRef = useRef<number[]>([]);
 
   // Reload subjects; keep the existing list visible while refreshing
   // by only showing the loading state when there are no subjects yet.
   async function reloadSubjects(userId: string) {
+    const now = Date.now();
+    // avoid rapid duplicate reloads
+    if (now - (lastReloadTsRef.current || 0) < 1500) return;
+    lastReloadTsRef.current = now;
     const showLoading = subjects.length === 0;
     try {
       if (showLoading) setLoadingSubjects(true);
@@ -120,9 +125,6 @@ export const SubjectsProvider = ({
       const t = window.setTimeout(() => {
         if (!mountedRef.current) return;
         reloadSubjects(user.id);
-        // also fetch and cache cards and uploads so data is available immediately
-        fetchAndCacheCards(user.id).catch(() => {});
-        fetchAndCacheUploads(user.id).catch(() => {});
       }, 0);
       // cleanup timer if unmounting
       // store timer id on ref so we can clear in return
@@ -172,17 +174,11 @@ export const SubjectsProvider = ({
       try {
         const p = e?.detail?.pathname;
         if (!p) return;
-        // reload subjects when navigating to pages that use subjects
-        if (
-          p.startsWith("/subjects") ||
-          p.startsWith("/decks") ||
-          p.startsWith("/resources")
-        ) {
+        // Only reload subjects and related caches when navigating to the Subjects page itself.
+        // Other pages (decks/resources) have their own listeners and will fetch their own data.
+        if (p.startsWith("/subjects")) {
           if (user && user.id) {
             schedule(() => reloadSubjects(user.id).catch(() => {}));
-            // also refresh cached cards and uploads so previews and lists are available
-            schedule(() => fetchAndCacheCards(user.id).catch(() => {}));
-            schedule(() => fetchAndCacheUploads(user.id).catch(() => {}));
           }
         }
       } catch (err) {}
