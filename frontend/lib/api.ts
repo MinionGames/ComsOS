@@ -50,6 +50,17 @@ export const api = {
         body: JSON.stringify({ content }),
       }),
   },
+  ai: {
+    generateCards: (
+      extracted_text: string,
+      subject_name?: string,
+      model?: string,
+    ) =>
+      apiFetch("/ai/generate-cards", {
+        method: "POST",
+        body: JSON.stringify({ extracted_text, subject_name, model }),
+      }),
+  },
   uploads: {
     upload: async (subjectId: string, file: File) => {
       const form = new FormData();

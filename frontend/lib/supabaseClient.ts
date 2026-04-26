@@ -16,4 +16,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabaseConfigured = !!supabaseUrl && !!supabaseAnonKey;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Disable automatic session persistence to avoid gotrue-js localStorage locks
+// We persist the access token manually in `UserContext` to send to the backend.
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+  },
+});

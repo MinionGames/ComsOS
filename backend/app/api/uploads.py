@@ -3,6 +3,7 @@ from app.api.auth import get_current_user
 from app.db.client import supabase
 from app.services.pdf_extractor import extract_text_from_bytes
 from app.config import settings
+import re
 import uuid
 from ..models.upload import router as uploads_router
 import traceback
@@ -25,7 +26,9 @@ async def upload_file(
             )
 
         file_bytes = await file.read()
-        storage_path = f"{user_id}/{subject_id}/{uuid.uuid4()}_{file.filename}"
+        # sanitize filename for storage key (remove spaces and unsafe chars)
+        safe_filename = re.sub(r"[^A-Za-z0-9._-]", "_", file.filename)
+        storage_path = f"{user_id}/{subject_id}/{uuid.uuid4()}_{safe_filename}"
 
         # upload raw file to Supabase Storage
         upload_res = supabase.storage.from_(settings.storage_bucket)
@@ -60,6 +63,7 @@ async def upload_file(
         record = {
             "subject_id": db_subject_id,
             "user_id": user_id,
+            # keep original filename for display, but storage uses safe filename
             "file_name": file.filename,
             "storage_path": storage_path,
             "bucket": settings.storage_bucket,

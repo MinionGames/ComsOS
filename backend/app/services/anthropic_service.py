@@ -2,7 +2,7 @@ from app.config import settings
 import httpx
 import logging
 from typing import Any, Dict, Optional
-from starlette.concurrency import run_in_threadpool
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +59,44 @@ def _extract_text_from_response(data: dict) -> str:
     return str(data)
 
 
+def _coerce_sdk_response_to_text(resp: object) -> str:
+    """Try to extract a plain text string from various Anthropic SDK response objects."""
+    # If it's already a string
+    if isinstance(resp, str):
+        return resp
+
+    # Some SDKs return an object with `.content` which is a list of TextBlock-like objects
+    content = getattr(resp, "content", None)
+    if content:
+        # content may be a list of blocks
+        if isinstance(content, (list, tuple)) and len(content) > 0:
+            first = content[0]
+            # TextBlock may have `.text` or `.content` property
+            text = getattr(first, "text", None) or getattr(first, "content", None)
+            if text is not None:
+                return text
+            # fallback: stringify the block
+            return str(first)
+        # if content is a plain string
+        if isinstance(content, str):
+            return content
+
+    # Some SDK responses embed the message under `.message` or `.completion`
+    if hasattr(resp, "message"):
+        msg = getattr(resp, "message")
+        if isinstance(msg, dict):
+            return _extract_text_from_response(msg)
+        return str(msg)
+
+    if hasattr(resp, "completion"):
+        return str(getattr(resp, "completion"))
+
+    # last resort
+    return str(resp)
+
+
 class ClaudeService:
-    def __init__(self, api_key: str, default_model: str = "claude-opus-4-7"):
+    def __init__(self, api_key: str, default_model: str = "claude-haiku-4-5-20251001"):
         self.api_key = api_key
         self.default_model = default_model
 
@@ -86,18 +122,13 @@ class ClaudeService:
                             messages=[{"role": "user", "content": prompt}],
                             max_tokens=max_tokens,
                         )
-                        # attempt to extract text
+                        # attempt to extract text from SDK message object
+                        text = _coerce_sdk_response_to_text(resp)
+                        if isinstance(text, str):
+                            return text
+                        # fallback to dict extractor
                         if isinstance(resp, dict):
                             return _extract_text_from_response(resp)
-                        if hasattr(resp, "message"):
-                            msg = getattr(resp, "message")
-                            return (
-                                _extract_text_from_response(msg)
-                                if isinstance(msg, dict)
-                                else str(msg)
-                            )
-                        if hasattr(resp, "completion"):
-                            return getattr(resp, "completion")
                         return str(resp)
                     except Exception as e:
                         logger.exception("Anthropic SDK messages.create failed")
@@ -113,10 +144,12 @@ class ClaudeService:
                             prompt=prompt,
                             max_tokens_to_sample=max_tokens,
                         )
+                        # try to coerce SDK response
+                        text = _coerce_sdk_response_to_text(resp)
+                        if isinstance(text, str):
+                            return text
                         if isinstance(resp, dict):
                             return _extract_text_from_response(resp)
-                        if hasattr(resp, "completion"):
-                            return getattr(resp, "completion")
                         return str(resp)
                     except Exception as e:
                         logger.exception("Anthropic SDK completions.create failed")
@@ -126,7 +159,7 @@ class ClaudeService:
                     "Installed Anthropic SDK does not expose messages or completions APIs"
                 )
 
-            return await run_in_threadpool(_sdk_call)
+            return await asyncio.to_thread(_sdk_call)
 
         # HTTP path
         headers = {
@@ -186,7 +219,7 @@ class ClaudeService:
                     "Installed Anthropic SDK does not expose a models listing API"
                 )
 
-            return await run_in_threadpool(_sdk_call)
+            return await asyncio.to_thread(_sdk_call)
 
         url = "https://api.anthropic.com/v1/models"
         headers = {
@@ -219,46 +252,4 @@ async def list_models() -> Any:
     return await claude.list_models()
 
 
-async def list_models() -> Any:
-    """Return available models for the configured API key.
-
-    Uses the installed SDK when available, otherwise falls back to an HTTP GET.
-    """
-    if not settings.anthropic_api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is not configured in environment")
-
-    # SDK path
-    if anthropic is not None:
-        client = anthropic.Client(api_key=settings.anthropic_api_key)
-
-        def _sdk_call():
-            # different SDK versions expose models list differently
-            if hasattr(client, "models") and hasattr(client.models, "list"):
-                return client.models.list()
-            if hasattr(client, "models"):
-                try:
-                    return client.models()
-                except Exception:
-                    pass
-            # some SDKs offer a raw request helper
-            if hasattr(client, "request"):
-                return client.request("GET", "/v1/models")
-            raise RuntimeError(
-                "Installed Anthropic SDK does not expose a models listing API"
-            )
-
-        return await run_in_threadpool(_sdk_call)
-
-    # HTTP fallback
-    url = "https://api.anthropic.com/v1/models"
-    headers = {
-        "Authorization": f"Bearer {settings.anthropic_api_key}",
-        "Content-Type": "application/json",
-    }
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.get(url, headers=headers)
-
-    if resp.status_code >= 400:
-        raise RuntimeError(f"Error code: {resp.status_code} - {resp.text}")
-
-    return resp.json()
+# note: module-level wrappers `complete` and `list_models` above call `claude` directly

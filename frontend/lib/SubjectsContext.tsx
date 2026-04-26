@@ -1,5 +1,11 @@
 "use client";
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useRef,
+} from "react";
 
 interface Subject {
   id: string;
@@ -36,6 +42,8 @@ export const SubjectsProvider = ({
   const [focusReloadNeeded, setFocusReloadNeeded] = React.useState(false);
   const { user, loading: userLoading } = useUser();
   const pathname = usePathname();
+  const mountedRef = useRef(true);
+  const timersRef = useRef<number[]>([]);
 
   // Reload subjects; keep the existing list visible while refreshing
   // by only showing the loading state when there are no subjects yet.
@@ -63,15 +71,24 @@ export const SubjectsProvider = ({
       const res = await supabaseClient
         .from("cards")
         .select(
-          "id, title, type, content, file_url, due_date, created_at, subject_id, order, mastery_level, last_reviewed_at, next_review_at",
+          "id, front, back, file_url, due_date, created_at, subject_id, order, mastery_level, last_reviewed_at, next_review_at",
         )
         .eq("user_id", userId)
         .order("order", { ascending: true });
       const data = (res as any).data || [];
+      // normalize front/back -> title/content for local cache
+      const normalized = (data || []).map((r: any) => ({
+        ...r,
+        title: r.title ?? r.front ?? null,
+        content: r.content ?? r.back ?? null,
+      }));
       try {
         if (typeof window !== "undefined") {
-          localStorage.setItem(`comsos:cards:${userId}`, JSON.stringify(data));
-          localStorage.setItem(`comsos:cards`, JSON.stringify(data));
+          localStorage.setItem(
+            `comsos:cards:${userId}`,
+            JSON.stringify(normalized),
+          );
+          localStorage.setItem(`comsos:cards`, JSON.stringify(normalized));
         }
       } catch (e) {}
     } catch (e) {
@@ -116,24 +133,46 @@ export const SubjectsProvider = ({
   }
 
   React.useEffect(() => {
+    mountedRef.current = true;
+
     if (user && user.id) {
-      reloadSubjects(user.id, supabase);
-      // also fetch and cache cards and uploads so data is available immediately
-      fetchAndCacheCards(user.id, supabase).catch(() => {});
-      fetchAndCacheUploads(user.id, supabase).catch(() => {});
+      // defer fetches to avoid competing auth localStorage lock in StrictMode
+      const t = window.setTimeout(() => {
+        if (!mountedRef.current) return;
+        reloadSubjects(user.id, supabase);
+        // also fetch and cache cards and uploads so data is available immediately
+        fetchAndCacheCards(user.id, supabase).catch(() => {});
+        fetchAndCacheUploads(user.id, supabase).catch(() => {});
+      }, 0);
+      // cleanup timer if unmounting
+      // store timer id on ref so we can clear in return
+      (mountedRef as any).timer = t;
     } else if (!userLoading) {
       // only clear subjects when auth is settled and there's no user
       setSubjects([]);
       setLoadingSubjects(false);
     }
+    function schedule(fn: () => void) {
+      try {
+        const t = window.setTimeout(() => {
+          try {
+            fn();
+          } catch (e) {}
+        }, 0) as unknown as number;
+        timersRef.current.push(t);
+      } catch (e) {
+        // ignore
+      }
+    }
+
     function onFocus() {
       if (user && user.id) {
-        reloadSubjects(user.id, supabase).catch(() => {});
+        schedule(() => reloadSubjects(user.id, supabase).catch(() => {}));
       }
     }
     function onVisibility() {
       if (document.visibilityState === "visible" && user && user.id) {
-        reloadSubjects(user.id, supabase).catch(() => {});
+        schedule(() => reloadSubjects(user.id, supabase).catch(() => {}));
       }
     }
     window.addEventListener("focus", onFocus);
@@ -156,20 +195,35 @@ export const SubjectsProvider = ({
         // reload subjects when navigating to pages that use subjects
         if (
           p.startsWith("/subjects") ||
-          p.startsWith("/cards") ||
+          p.startsWith("/decks") ||
           p.startsWith("/resources")
         ) {
           if (user && user.id) {
-            reloadSubjects(user.id, supabase).catch(() => {});
+            schedule(() => reloadSubjects(user.id, supabase).catch(() => {}));
             // also refresh cached cards and uploads so previews and lists are available
-            fetchAndCacheCards(user.id, supabase).catch(() => {});
-            fetchAndCacheUploads(user.id, supabase).catch(() => {});
+            schedule(() =>
+              fetchAndCacheCards(user.id, supabase).catch(() => {}),
+            );
+            schedule(() =>
+              fetchAndCacheUploads(user.id, supabase).catch(() => {}),
+            );
           }
         }
       } catch (err) {}
     }
     window.addEventListener("comsos:navigate", onNavigate as EventListener);
     return () => {
+      mountedRef.current = false;
+      // clear deferred timers
+      try {
+        timersRef.current.forEach((t) => window.clearTimeout(t));
+        timersRef.current = [];
+      } catch (e) {}
+      // also clear initial deferred timer if present
+      try {
+        const t = (mountedRef as any).timer;
+        if (t) window.clearTimeout(t);
+      } catch (e) {}
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener(
