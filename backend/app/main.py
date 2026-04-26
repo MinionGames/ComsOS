@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth, subjects, notes, uploads
 from app.api.debug import router as debug_router
+from app.api import ai as ai_api
 
 app = FastAPI(title="ComsOS API")
 
@@ -24,6 +25,7 @@ app.include_router(notes.router, prefix="/notes", tags=["notes"])
 app.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
 
 app.include_router(debug_router, prefix="/debug", tags=["debug"])
+app.include_router(ai_api.router, prefix="/ai", tags=["ai"])
 
 
 @app.get("/health")
