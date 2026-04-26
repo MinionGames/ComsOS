@@ -4,7 +4,6 @@ import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { supabase, supabaseConfigured } from "../../lib/supabaseClient";
 import { api } from "../../lib/api";
 import { useSubjects } from "../../lib/SubjectsContext";
 
@@ -27,6 +26,7 @@ export default function ResourcesPage() {
   >(null);
   const [isDark, setIsDark] = useState<boolean>(false);
   const [extractedOpen, setExtractedOpen] = useState<boolean>(false);
+  const [generating, setGenerating] = useState<boolean>(false);
 
   useEffect(() => {
     if (user) document.title = `Resources | ComsOS`;
@@ -45,79 +45,44 @@ export default function ResourcesPage() {
       isFetchingRef.current = true;
       const start = performance.now();
       try {
-        const res = await supabase
-          .from("uploads")
-          .select(
-            "id, file_name, public_url, storage_path, created_at, subject_id, extracted_text",
-          )
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(200);
-
-        const duration = Math.round(performance.now() - start);
-
-        if (res.error) {
-          try {
-            console.error("Failed to load uploads:", {
-              error: res.error,
-              status: (res as any).status,
-              statusText: (res as any).statusText,
-              data: res.data,
-              duration,
-              attempt,
-            });
-          } catch (logErr) {
-            console.error("Failed to load uploads (fallback):", res, {
-              duration,
-              attempt,
-            });
+        const startFetch = performance.now();
+        const data = (await api.uploads.list()) || [];
+        const duration = Math.round(performance.now() - startFetch);
+        const mapped = (data || []).map((r: any) => ({
+          id: r.id,
+          name: r.file_name,
+          publicURL: r.public_url,
+          path: r.storage_path,
+          created_at: r.created_at,
+          subject_id: r.subject_id,
+          content: r.extracted_text || "",
+        }));
+        console.info("Loaded uploads", { count: mapped.length, duration });
+        setFiles(mapped);
+        // If the edit modal is open for a file, sync the editingFile state
+        // with the freshly-fetched record so publicURL and content stay current.
+        try {
+          if (editingFile && editingFile.id) {
+            const updated = mapped.find((m: any) => m.id === editingFile.id);
+            if (updated)
+              setEditingFile((prev: any) => ({
+                ...(prev || {}),
+                ...updated,
+              }));
           }
-
-          if (attempt < 2) {
-            const delay = 300 * Math.pow(2, attempt);
-            await new Promise((r) => setTimeout(r, delay));
-            return doFetch(attempt + 1);
+        } catch (e) {}
+        // persist cache (per-user and generic fallback)
+        try {
+          if (typeof window !== "undefined") {
+            if (user?.id)
+              localStorage.setItem(
+                `comsos:uploads:${user.id}`,
+                JSON.stringify(mapped),
+              );
+            localStorage.setItem(`comsos:uploads`, JSON.stringify(mapped));
           }
-
-          if (showSpinner) setFiles([]);
-        } else {
-          const data = res.data as any[] | null;
-          const mapped = (data || []).map((r: any) => ({
-            id: r.id,
-            name: r.file_name,
-            publicURL: r.public_url,
-            path: r.storage_path,
-            created_at: r.created_at,
-            subject_id: r.subject_id,
-            content: r.extracted_text || "",
-          }));
-          console.info("Loaded uploads", { count: mapped.length, duration });
-          setFiles(mapped);
-          // If the edit modal is open for a file, sync the editingFile state
-          // with the freshly-fetched record so publicURL and content stay current.
-          try {
-            if (editingFile && editingFile.id) {
-              const updated = mapped.find((m: any) => m.id === editingFile.id);
-              if (updated)
-                setEditingFile((prev: any) => ({
-                  ...(prev || {}),
-                  ...updated,
-                }));
-            }
-          } catch (e) {}
-          // persist cache (per-user and generic fallback)
-          try {
-            if (typeof window !== "undefined") {
-              if (user?.id)
-                localStorage.setItem(
-                  `comsos:uploads:${user.id}`,
-                  JSON.stringify(mapped),
-                );
-              localStorage.setItem(`comsos:uploads`, JSON.stringify(mapped));
-            }
-          } catch (e) {}
-          fetchedRef.current = true;
-        }
+        } catch (e) {}
+        fetchedRef.current = true;
       } catch (e) {
         console.error(e);
         if (showSpinner) setFiles([]);
@@ -254,15 +219,59 @@ export default function ResourcesPage() {
   // when there are no files yet.
   if (loading && files.length === 0) {
     return (
-      <div
-        style={{
-          padding: 32,
-          textAlign: "center",
-          fontFamily: "'Roboto', sans-serif",
-        }}
-      >
-        <div>Loading...</div>
-      </div>
+      <>
+        <div
+          style={{
+            padding: 32,
+            textAlign: "center",
+            fontFamily: "'Roboto', sans-serif",
+          }}
+        >
+          <div>Loading...</div>
+        </div>
+        {generating && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 99999,
+            }}
+          >
+            <div
+              style={{
+                background: isDark ? "#0b1220" : "#fff",
+                color: isDark ? "#e6eef8" : "#000",
+                padding: 28,
+                borderRadius: 10,
+                minWidth: 280,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  border: "5px solid var(--primary, #6366f1)",
+                  borderTop: "5px solid transparent",
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
+                }}
+              />
+              <div style={{ fontSize: 18, fontWeight: 600 }}>
+                Generating deck…
+              </div>
+              <style>{`@keyframes spin {0% { transform: rotate(0deg);}100% { transform: rotate(360deg);} }`}</style>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -319,17 +328,11 @@ export default function ResourcesPage() {
       if (editingTitle != null) updates.file_name = editingTitle;
       // normalize empty string to null for subject
       updates.subject_id = editingSubject || null;
-      const { data, error } = await supabase
-        .from("uploads")
-        .update(updates)
-        .eq("id", editingFile.id)
-        .select();
-      if (error) {
-        console.error("Failed to update upload:", error);
-        alert(error.message || "Failed to save");
+      const updated = await api.uploads.update(editingFile.id, updates);
+      if (!updated) {
+        alert("Failed to save");
         return;
       }
-      const updated = (data && data[0]) || null;
       // Update local state list
       setFiles((prev) =>
         prev.map((f) =>
@@ -575,21 +578,20 @@ export default function ResourcesPage() {
                       if (!editingFile) return;
                       try {
                         const txt = editingFile.content || "";
-                        // simple confirmation
-                        const proceed = confirm(
-                          "Send extracted text to generate flashcards?",
-                        );
-                        if (!proceed) return;
+                        setGenerating(true);
                         const res = await api.ai.generateCards(
                           txt,
                           editingFile.subject_id || undefined,
+                          editingTitle || editingFile.name || undefined,
                         );
                         console.log("Generated cards:", res);
+                        setGenerating(false);
                         alert(
                           `Request complete — generated ${res.cards?.length || 0} cards (see console).`,
                         );
                       } catch (err: any) {
                         console.error(err);
+                        setGenerating(false);
                         alert(
                           "Card generation failed: " +
                             (err?.message || String(err)),
