@@ -13,7 +13,7 @@ async def generate_cards_from_text(
 ) -> List[Dict]:
     """
     Sends extracted PDF text to Claude and returns a list of card dicts.
-    Each dict contains: front, back, difficulty, card_type.
+    Each dict contains: front, back.
     Raises ValueError on parse errors or ClaudeServiceError for API issues.
     """
 
@@ -62,8 +62,6 @@ async def generate_cards_from_text(
             {
                 "front": str(card["front"]).strip(),
                 "back": str(card["back"]).strip(),
-                "difficulty": card.get("difficulty", "medium"),
-                "card_type": card.get("card_type", "definition"),
             }
         )
 

@@ -81,6 +81,11 @@ export const api = {
   decks: {
     list: () => cachedApiFetch("/decks/", {}, 2000),
     counts: () => cachedApiFetch("/decks/counts", {}, 2000),
+    update: (id: string, updates: any) =>
+      apiFetch(`/decks/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      }),
   },
   notes: {
     list: (subjectId: string) => apiFetch(`/notes/?subject_id=${subjectId}`),
