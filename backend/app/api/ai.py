@@ -143,8 +143,6 @@ async def generate_cards(
                     "user_id": user_id,
                     "front": front,
                     "back": back,
-                    "difficulty": c.get("difficulty") or "medium",
-                    "card_type": c.get("card_type") or "definition",
                     "subject_id": subject_id,
                     "deck_id": deck_id,
                 }

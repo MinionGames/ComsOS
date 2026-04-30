@@ -8,7 +8,5 @@ create table cards (
   type text check (type in ('task', 'note', 'file')) not null,
   title text not null,
   content text,
-  file_url text,
-  due_date timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
