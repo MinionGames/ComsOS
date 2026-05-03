@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import sys
 
 from app.config import settings
@@ -25,20 +24,14 @@ MOCK_OUTPUT = json.dumps(
         {
             "front": "What is photosynthesis?",
             "back": "Photosynthesis is the process by which plants convert light energy into chemical energy, producing oxygen as a byproduct.",
-            "difficulty": "easy",
-            "card_type": "definition",
         },
         {
             "front": "Which pigment is primarily involved in photosynthesis?",
             "back": "Chlorophyll is the primary pigment that absorbs light for photosynthesis.",
-            "difficulty": "easy",
-            "card_type": "definition",
         },
         {
             "front": "What are the main inputs and outputs of photosynthesis?",
             "back": "Inputs: carbon dioxide and water; Output: glucose (chemical energy) and oxygen.",
-            "difficulty": "medium",
-            "card_type": "mechanism",
         },
     ]
 )

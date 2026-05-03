@@ -10,18 +10,13 @@ RULES:
 4. Cards must require genuine recall — not keyword matching. A student should not be able to guess the answer from the wording of the question alone.
 5. Do not generate duplicate concepts. If a topic has already been covered by a card, skip it.
 6. Prioritise cards on concepts that are commonly misunderstood, frequently tested, or foundational to understanding the rest of the material.
-7. Assign a difficulty: "easy" (recall of a single fact), "medium" (requires understanding of a concept), or "hard" (requires synthesis, comparison, or application).
-8. Assign a card_type: "definition", "mechanism", "application", or "comparison".
-
 OUTPUT FORMAT:
 Return ONLY a valid JSON array. No markdown. No backticks. No explanation before or after. The array must be parseable by Python's json.loads() directly.
 
 [
   {
     "front": "Question here",
-    "back": "Answer here",
-    "difficulty": "easy" | "medium" | "hard",
-    "card_type": "definition" | "mechanism" | "application" | "comparison"
+    "back": "Answer here"
   }
 ]
 
