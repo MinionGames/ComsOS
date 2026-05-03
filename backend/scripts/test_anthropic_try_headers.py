@@ -30,8 +30,7 @@ async def try_header(name, value):
 
 
 async def main():
-    # key = os.getenv("ANTHROPIC_API_KEY")
-    key = "[REDACTED_ANTHROPIC_API_KEY_1]"
+    key = os.getenv("ANTHROPIC_API_KEY")
     if not key:
         print("No ANTHROPIC_API_KEY in environment")
         return

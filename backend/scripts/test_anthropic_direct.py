@@ -6,8 +6,10 @@ API_URL = "https://api.anthropic.com/v1/messages"
 
 
 async def main():
-    # key = os.getenv("ANTHROPIC_API_KEY")
-    key = "[REDACTED_ANTHROPIC_API_KEY_1]"
+    key = os.getenv("ANTHROPIC_API_KEY")
+    if not key:
+        print("No ANTHROPIC_API_KEY in environment")
+        return
     if not key:
         print("No ANTHROPIC_API_KEY in environment")
         return
