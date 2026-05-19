@@ -7,6 +7,7 @@ import math
 import time
 import numpy as np
 from app.services.anthropic_service import claude, ClaudeServiceError
+import os
 
 # =========================
 # Utility Functions

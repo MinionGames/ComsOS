@@ -126,19 +126,12 @@ export const api = {
       form.append("file", file);
       // Prefer reading token from localStorage (fast, avoids gotrue locks).
       // Fall back to supabase.auth.getSession() only if localStorage is empty.
+      // Prefer reading token from localStorage (fast, avoids gotrue locks).
       let token: string | undefined = undefined;
       try {
         token = localStorage.getItem("access_token") ?? undefined;
       } catch (e) {
         token = undefined;
-      }
-      if (!token) {
-        try {
-          const sess = await supabase.auth.getSession();
-          token = sess.data.session?.access_token;
-        } catch (e) {
-          // ignore
-        }
       }
       // sanitize common bad values that may have been stored as strings
       if (typeof token === "string") {
@@ -188,17 +181,10 @@ export const api = {
     getSignedUrl: async (uploadId: string | number) => {
       // reuse same token logic as upload
       let token: string | undefined = undefined;
-      // Prefer localStorage first to avoid calling gotrue locks frequently.
       try {
         token = localStorage.getItem("access_token") ?? undefined;
       } catch (e) {
         token = undefined;
-      }
-      if (!token) {
-        try {
-          const sess = await supabase.auth.getSession();
-          token = sess.data.session?.access_token;
-        } catch (e) {}
       }
       if (typeof token === "string") {
         const t = token.trim();

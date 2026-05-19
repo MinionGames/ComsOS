@@ -1,26 +1,20 @@
-import { supabase } from "./supabaseClient";
-
 export async function getOrCreateUserProfile(user: {
   id: string;
   email: string;
-  name?: string;
+  name?: string | null;
 }) {
-  // Try to fetch the profile
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
-  if (data) return data;
-
-  // If not found, create it
-  const { data: newProfile, error: insertError } = await supabase
-    .from("profiles")
-    .insert([{ id: user.id, email: user.email, name: user.name || null }])
-    .select()
-    .single();
-
-  if (insertError) throw insertError;
-  return newProfile;
+  // Delegate profile lookup/creation to the backend `/auth/me` or a profiles
+  // endpoint. If the backend is called without a token, fall back to null.
+  try {
+    const tok = typeof window !== "undefined" ? window.localStorage.getItem("access_token") : null;
+    if (!tok) return null;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/auth/me`, {
+      headers: { Authorization: `Bearer ${tok}` },
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    return j?.profile ?? null;
+  } catch (e) {
+    return null;
+  }
 }

@@ -1,23 +1,19 @@
-import { useEffect, useState } from "react";
-import { supabase } from "./supabaseClient";
+import { useEffect } from "react";
 import { getOrCreateUserProfile } from "./supabaseUser";
 
 export function useSupabaseProfileSync() {
-  const [user, setUser] = useState<any>(null);
-
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setUser(data.user);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (user?.email && user?.id) {
-      getOrCreateUserProfile({
-        id: user.id,
-        email: user.email,
-        name: user.user_metadata?.name || null,
-      });
+    async function trySync() {
+      try {
+        const tok = typeof window !== "undefined" ? window.localStorage.getItem("access_token") : null;
+        if (!tok) return;
+        // Trigger backend to ensure profile exists and is synced. Backend's /auth/me
+        // already returns profile; calling getOrCreateUserProfile will fetch it.
+        await getOrCreateUserProfile({ id: "", email: "" });
+      } catch (e) {
+        // ignore
+      }
     }
-  }, [user]);
+    trySync();
+  }, []);
 }

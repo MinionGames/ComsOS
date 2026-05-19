@@ -2,8 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
 from jose import jwt
 from ..config import settings
-from ..db.client import supabase
+from ..db.client import supabase, supabase_anon
+import httpx
 import warnings
+import traceback
+import os
 
 router = APIRouter()
 
@@ -74,8 +77,10 @@ async def get_current_user(authorization: str = Header(None)):
 @router.post("/signup")
 async def signup(body: AuthRequest):
     try:
-        res = supabase.auth.sign_up({"email": body.email, "password": body.password})
+        # Use anon/publishable client for auth sign-up flow
+        res = supabase_anon.auth.sign_up({"email": body.email, "password": body.password})
     except Exception as e:
+        print("Signup exception:\n", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
     if res.user is None:
         raise HTTPException(status_code=400, detail="Signup failed")
@@ -91,11 +96,54 @@ async def signup(body: AuthRequest):
 
 @router.post("/login")
 async def login(body: AuthRequest):
+    # Try a direct REST call to Supabase auth token endpoint using the
+    # publishable/anon key. This avoids library paths that may attempt to
+    # use legacy/service keys for auth and trigger "Legacy API keys are disabled".
     try:
-        res = supabase.auth.sign_in_with_password(
-            {"email": body.email, "password": body.password}
-        )
+        publishable = settings.supabase_anon_key
+        if not publishable:
+            # fall back to using anon client if publishable missing
+            res = supabase_anon.auth.sign_in_with_password(
+                {"email": body.email, "password": body.password}
+            )
+        else:
+            # Validate the publishable key looks like the new `sb_` key
+            if not publishable.startswith("sb_"):
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Configured SUPABASE_PUBLISHABLE_KEY does not look like a new publishable key. "
+                        "Remove legacy keys and set SUPABASE_PUBLISHABLE_KEY to the 'sb_' publishable key from the Supabase dashboard."
+                    ),
+                )
+
+            url = settings.supabase_url.rstrip("/") + "/auth/v1/token?grant_type=password"
+            # Send the publishable key in both headers to match typical Supabase client behavior
+            headers = {
+                "apikey": publishable,
+                "Authorization": f"Bearer {publishable}",
+                "Content-Type": "application/json",
+            }
+            print("Auth request using publishable key (masked)", publishable[:8] + "..." + publishable[-6:])
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                r = await client.post(url, json={"email": body.email, "password": body.password}, headers=headers)
+            if r.status_code >= 400:
+                # propagate error message from Supabase
+                detail = r.text
+                raise HTTPException(status_code=401, detail=detail)
+            j = r.json()
+            # j contains access_token, refresh_token, user, etc.
+            class _Res:
+                pass
+
+            res = _Res()
+            res.session = type("S", (), {})()
+            res.session.access_token = j.get("access_token")
+            res.user = j.get("user")
+    except HTTPException:
+        raise
     except Exception as e:
+        print("Login exception:\n", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
     if res.user is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")

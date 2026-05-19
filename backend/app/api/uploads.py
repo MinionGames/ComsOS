@@ -28,7 +28,17 @@ async def upload_file(
         file_bytes = await file.read()
         # sanitize filename for storage key (remove spaces and unsafe chars)
         safe_filename = re.sub(r"[^A-Za-z0-9._-]", "_", file.filename)
-        storage_path = f"{user_id}/{subject_id}/{uuid.uuid4()}_{safe_filename}"
+
+        # normalize subject_id: allow callers to pass 'null' or 'none' when no subject
+        if subject_id in ("null", "none", ""):
+            db_subject_id = None
+        else:
+            db_subject_id = subject_id
+
+        # storage path must not include literal 'null'/'None' segments; use 'none' placeholder
+        subject_segment = db_subject_id or "none"
+
+        storage_path = f"{user_id}/{subject_segment}/{uuid.uuid4()}_{safe_filename}"
 
         # upload raw file to Supabase Storage
         upload_res = supabase.storage.from_(settings.storage_bucket)
@@ -53,11 +63,7 @@ async def upload_file(
             extracted = None
             processed = False
 
-        # normalize subject_id: allow callers to pass 'null' or 'none' when no subject
-        if subject_id in ("null", "none", ""):
-            db_subject_id = None
-        else:
-            db_subject_id = subject_id
+        # db_subject_id already normalized above
 
         # save record into uploads table
         record = {
