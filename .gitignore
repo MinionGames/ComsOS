@@ -24,3 +24,4 @@ node_modules
 
 ComsOS/backend/.env
 ComsOS/frontend/.env
+backend/.env
