@@ -1,10 +1,12 @@
 "use client";
 import React, { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useUser } from "../../lib/UserContext";
 import { api } from "../../lib/api";
 
 export default function DecksPage() {
   const { user, loading: userLoading } = useUser();
+  const router = useRouter();
   const [decks, setDecks] = useState<any[]>([]);
   const [loadingDecks, setLoadingDecks] = useState(true);
   const mountedRef = useRef(true);
@@ -197,6 +199,31 @@ export default function DecksPage() {
                 }}
               >
                 Exit
+              </button>
+              <button
+                onClick={() => {
+                  // start studying this deck in Study Mode
+                  if (!viewerDeck) return;
+                  setViewerOpen(false);
+                  setViewerDeck(null);
+                  try {
+                    router.push(`/study-mode?deck=${viewerDeck.id}`);
+                  } catch (e) {
+                    // fallback
+                    window.location.href = `/study-mode?deck=${viewerDeck.id}`;
+                  }
+                }}
+                style={{
+                  background: "#059669",
+                  color: "#fff",
+                  border: "none",
+                  padding: "6px 12px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontSize: 13,
+                }}
+              >
+                Study
               </button>
               <button
                 onClick={async () => {

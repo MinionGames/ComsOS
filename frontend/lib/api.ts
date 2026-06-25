@@ -11,7 +11,56 @@ async function apiFetch(path: string, options: RequestInit = {}) {
       ...options.headers,
     },
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "(no body)");
+    // Try several strategies to parse JSON error bodies because some
+    // backends (or proxies) may double-encode or wrap JSON in strings.
+    const safeParse = (input: string) => {
+      if (!input || typeof input !== "string") return null;
+      const s = input.trim();
+      try {
+        // First attempt: direct JSON.parse
+        const parsed = JSON.parse(s);
+        // If parsed is a string containing JSON, try parse again
+        if (typeof parsed === "string") {
+          try {
+            return JSON.parse(parsed);
+          } catch (_) {
+            return parsed;
+          }
+        }
+        return parsed;
+      } catch (_e) {
+        // Try to extract a JSON object substring like {...}
+        const m = s.match(/(\{[\s\S]*\})/);
+        if (m && m[1]) {
+          try {
+            return JSON.parse(m[1]);
+          } catch (_e2) {
+            // fallthrough
+          }
+        }
+        // Try unwrapping a quoted JSON string (leading/trailing quotes)
+        if (s.startsWith('"') && s.endsWith('"')) {
+          try {
+            const unq = s.slice(1, -1).replace(/\\"/g, '"');
+            return JSON.parse(unq);
+          } catch (_e3) {
+            // fallthrough
+          }
+        }
+        return null;
+      }
+    };
+
+    const parsed = safeParse(txt);
+    if (parsed && typeof parsed === "object") {
+      const msg = (parsed as any).detail || (parsed as any).message || JSON.stringify(parsed);
+      throw new Error(msg);
+    }
+    // fallback to raw text
+    throw new Error(txt || "(no body)");
+  }
   return res.json();
 }
 

@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
 import { api } from "../../lib/api";
 
 const StudyModePage = () => {
   const { user, loading } = useUser();
+  const searchParams = useSearchParams();
   const [isDark, setIsDark] = useState(false);
   const [decks, setDecks] = useState<any[]>([]);
   const [selectedDeck, setSelectedDeck] = useState<string | null>(null);
@@ -31,6 +33,14 @@ const StudyModePage = () => {
   };
 
   useEffect(() => {
+    // If a deck id was supplied in the URL (from the Decks page), auto-select it
+    try {
+      const deckParam = searchParams?.get?.("deck") || null;
+      if (deckParam) {
+        setSelectedDeck(deckParam);
+      }
+    } catch (e) {}
+
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = (e: MediaQueryListEvent | MediaQueryList) => {

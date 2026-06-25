@@ -7,6 +7,8 @@ import httpx
 import warnings
 import traceback
 import os
+from urllib.parse import urlparse
+from typing import Optional
 
 router = APIRouter()
 
@@ -14,6 +16,7 @@ router = APIRouter()
 class AuthRequest(BaseModel):
     email: str
     password: str
+    name: Optional[str] = None
 
 
 async def get_current_user(authorization: str = Header(None)):
@@ -77,20 +80,75 @@ async def get_current_user(authorization: str = Header(None)):
 @router.post("/signup")
 async def signup(body: AuthRequest):
     try:
-        # Use anon/publishable client for auth sign-up flow
-        res = supabase_anon.auth.sign_up({"email": body.email, "password": body.password})
+        publishable = settings.supabase_anon_key or os.getenv("SUPABASE_PUBLISHABLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+        if not publishable:
+            raise HTTPException(
+                status_code=500,
+                detail="Missing SUPABASE_PUBLISHABLE_KEY (or SUPABASE_ANON_KEY) in environment",
+            )
+        if not publishable.startswith("sb_"):
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Configured SUPABASE_PUBLISHABLE_KEY does not look like a new publishable key. "
+                    "Remove legacy keys and set SUPABASE_PUBLISHABLE_KEY to the 'sb_' publishable key from the Supabase dashboard."
+                ),
+            )
+
+        url = settings.supabase_url.rstrip("/") + "/auth/v1/signup"
+        headers = {
+            "apikey": publishable,
+            "Authorization": f"Bearer {publishable}",
+            "Content-Type": "application/json",
+        }
+        payload = {"email": body.email, "password": body.password}
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(url, json=payload, headers=headers)
+        if r.status_code >= 400:
+            detail = r.text
+            status = r.status_code
+            try:
+                ej = r.json()
+                if isinstance(ej, dict):
+                    msg = ej.get("msg") or ej.get("message") or ""
+                    err_code = ej.get("error_code") or ""
+                    if status == 429 or "rate limit" in msg.lower() or "rate_limit" in err_code.lower():
+                        status = 429
+                    detail = msg or detail
+            except Exception:
+                pass
+            raise HTTPException(status_code=status, detail=detail)
+
+        j = r.json()
+        class _Res:
+            pass
+
+        res = _Res()
+        res.user = j.get("user")
+    except HTTPException:
+        raise
     except Exception as e:
         print("Signup exception:\n", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
-    if res.user is None:
+    if not getattr(res, "user", None):
         raise HTTPException(status_code=400, detail="Signup failed")
-    # create profile row
-    supabase.table("profiles").insert(
-        {
-            "id": res.user.id,
-            "email": body.email,
-        }
-    ).execute()
+
+    user_id = res.user.get("id") if isinstance(res.user, dict) else getattr(res.user, "id", None)
+    if not user_id:
+        raise HTTPException(status_code=502, detail="Supabase signup response missing user id")
+
+    # Best-effort profile row creation. Do not block signup on profile insert race/duplicates.
+    profile_payload = {
+        "id": user_id,
+        "email": body.email,
+    }
+    if body.name:
+        profile_payload["name"] = body.name
+    try:
+        supabase.table("profiles").insert(profile_payload).execute()
+    except Exception:
+        pass
+
     return {"message": "Check your email to confirm your account"}
 
 
@@ -100,56 +158,90 @@ async def login(body: AuthRequest):
     # publishable/anon key. This avoids library paths that may attempt to
     # use legacy/service keys for auth and trigger "Legacy API keys are disabled".
     try:
-        publishable = settings.supabase_anon_key
+        publishable = settings.supabase_anon_key or os.getenv("SUPABASE_PUBLISHABLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
         if not publishable:
-            # fall back to using anon client if publishable missing
-            res = supabase_anon.auth.sign_in_with_password(
-                {"email": body.email, "password": body.password}
+            raise HTTPException(
+                status_code=500,
+                detail="Missing SUPABASE_PUBLISHABLE_KEY (or SUPABASE_ANON_KEY) in environment",
             )
-        else:
-            # Validate the publishable key looks like the new `sb_` key
-            if not publishable.startswith("sb_"):
-                raise HTTPException(
-                    status_code=500,
-                    detail=(
-                        "Configured SUPABASE_PUBLISHABLE_KEY does not look like a new publishable key. "
-                        "Remove legacy keys and set SUPABASE_PUBLISHABLE_KEY to the 'sb_' publishable key from the Supabase dashboard."
-                    ),
-                )
+        # Validate the publishable key looks like the new `sb_` key
+        if not publishable.startswith("sb_"):
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Configured SUPABASE_PUBLISHABLE_KEY does not look like a new publishable key. "
+                    "Remove legacy keys and set SUPABASE_PUBLISHABLE_KEY to the 'sb_' publishable key from the Supabase dashboard."
+                ),
+            )
 
-            url = settings.supabase_url.rstrip("/") + "/auth/v1/token?grant_type=password"
-            # Send the publishable key in both headers to match typical Supabase client behavior
-            headers = {
-                "apikey": publishable,
-                "Authorization": f"Bearer {publishable}",
-                "Content-Type": "application/json",
-            }
-            print("Auth request using publishable key (masked)", publishable[:8] + "..." + publishable[-6:])
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                r = await client.post(url, json={"email": body.email, "password": body.password}, headers=headers)
-            if r.status_code >= 400:
-                # propagate error message from Supabase
-                detail = r.text
-                raise HTTPException(status_code=401, detail=detail)
-            j = r.json()
-            # j contains access_token, refresh_token, user, etc.
-            class _Res:
+        url = settings.supabase_url.rstrip("/") + "/auth/v1/token?grant_type=password"
+        # Send the publishable key in both headers to match typical Supabase client behavior
+        headers = {
+            "apikey": publishable,
+            "Authorization": f"Bearer {publishable}",
+            "Content-Type": "application/json",
+        }
+        print("Auth request using publishable key (masked)", publishable[:8] + "..." + publishable[-6:])
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(url, json={"email": body.email, "password": body.password}, headers=headers)
+        if r.status_code >= 400:
+            detail = r.text
+            status = 401
+            try:
+                ej = r.json()
+                if isinstance(ej, dict):
+                    msg = ej.get("msg") or ej.get("message") or ""
+                    err_code = ej.get("error_code") or ""
+                    if r.status_code == 429 or "rate limit" in msg.lower() or "rate_limit" in err_code.lower():
+                        status = 429
+                    detail = msg or detail
+            except Exception:
                 pass
+            raise HTTPException(status_code=status, detail=detail)
+        j = r.json()
+        # j contains access_token, refresh_token, user, etc.
+        class _Res:
+            pass
 
-            res = _Res()
-            res.session = type("S", (), {})()
-            res.session.access_token = j.get("access_token")
-            res.user = j.get("user")
+        res = _Res()
+        res.session = type("S", (), {})()
+        res.session.access_token = j.get("access_token")
+        res.user = j.get("user")
+        if not res.session.access_token or not res.user:
+            raise HTTPException(
+                status_code=502,
+                detail="Supabase login response missing access_token or user",
+            )
     except HTTPException:
         raise
+    except httpx.RequestError as e:
+        host = urlparse(settings.supabase_url).hostname or settings.supabase_url
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"Unable to reach Supabase host '{host}'. "
+                "Verify SUPABASE_URL and network/DNS connectivity. "
+                f"Original error: {e}"
+            ),
+        )
     except Exception as e:
         print("Login exception:\n", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
     if res.user is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    user_id = res.user.get("id") if isinstance(res.user, dict) else getattr(res.user, "id", None)
+    user_email = (
+        res.user.get("email")
+        if isinstance(res.user, dict)
+        else getattr(res.user, "email", None)
+    )
+    if not user_id:
+        raise HTTPException(status_code=502, detail="Supabase login response missing user id")
+
     return {
         "access_token": res.session.access_token,
-        "user": {"id": res.user.id, "email": res.user.email},
+        "user": {"id": user_id, "email": user_email},
     }
 
 
