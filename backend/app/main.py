@@ -39,6 +39,7 @@ app.add_middleware(
     # Local dev may run Next.js on localhost, 127.0.0.1, or a LAN IP.
     # Keep explicit localhost origins and allow private-network origins via regex.
     allow_origins=[
+        "https://comsos.legatusaisolutions.com",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3001",

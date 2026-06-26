@@ -3,12 +3,18 @@ export async function getOrCreateUserProfile(user: {
   email: string;
   name?: string | null;
 }) {
+  const backendBase =
+    process.env.NEXT_PUBLIC_API_URL ||
+    (process.env.NODE_ENV === "development"
+      ? "http://localhost:8000"
+      : "https://api.comsos.legatusaisolutions.com");
+
   // Delegate profile lookup/creation to the backend `/auth/me` or a profiles
   // endpoint. If the backend is called without a token, fall back to null.
   try {
     const tok = typeof window !== "undefined" ? window.localStorage.getItem("access_token") : null;
     if (!tok) return null;
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/auth/me`, {
+    const res = await fetch(`${backendBase}/auth/me`, {
       headers: { Authorization: `Bearer ${tok}` },
     });
     if (!res.ok) return null;

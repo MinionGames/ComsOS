@@ -23,6 +23,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
+  const backendBase =
+    process.env.NEXT_PUBLIC_API_URL ||
+    (process.env.NODE_ENV === "development"
+      ? "http://localhost:8000"
+      : "https://api.comsos.legatusaisolutions.com");
 
   useEffect(() => {
     let mounted = true;
@@ -32,7 +37,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       try {
         const tok = typeof window !== "undefined" ? window.localStorage.getItem("access_token") : null;
         if (tok) {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/auth/me`, {
+          const res = await fetch(`${backendBase}/auth/me`, {
             headers: { Authorization: `Bearer ${tok}` },
           });
           if (res.ok) {
@@ -67,7 +72,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       try {
         const tok = typeof window !== "undefined" ? window.localStorage.getItem("access_token") : null;
         if (!tok) return;
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/auth/me`, {
+        const res = await fetch(`${backendBase}/auth/me`, {
           headers: { Authorization: `Bearer ${tok}` },
         });
         if (!res.ok) return;

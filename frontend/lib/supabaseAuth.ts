@@ -1,7 +1,10 @@
 import { supabase } from "./supabaseClient";
 
 const BACKEND_BASE =
-  (process.env.NEXT_PUBLIC_API_URL as string) || "http://localhost:8000";
+  (process.env.NEXT_PUBLIC_API_URL as string) ||
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:8000"
+    : "https://api.comsos.legatusaisolutions.com");
 
 async function fetchJson(path: string, init: RequestInit) {
   let res: Response;
@@ -20,15 +23,11 @@ async function fetchJson(path: string, init: RequestInit) {
   return { ok: res.ok, status: res.status, body };
 }
 
-export async function signUpWithEmail(
-  email: string,
-  password: string,
-  name?: string,
-) {
+export async function signUpWithEmail(email: string, password: string) {
   const r = await fetchJson("/auth/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, name }),
+    body: JSON.stringify({ email, password }),
   });
   if (!r.ok) return { error: { message: r.body?.detail || r.body || "Signup failed" } };
   // Backend returns a message; keep shape compatible with client expectations
@@ -60,15 +59,8 @@ export async function signInWithEmail(email: string, password: string) {
 }
 
 export async function signOut() {
-  const tok =
-    typeof window !== "undefined"
-      ? window.localStorage.getItem("access_token")
-      : null;
   try {
-    await fetchJson("/auth/logout", {
-      method: "POST",
-      headers: tok ? { Authorization: `Bearer ${tok}` } : undefined,
-    });
+    await fetchJson("/auth/logout", { method: "POST" });
   } catch (e) {
     // ignore
   }
@@ -90,10 +82,9 @@ export async function getCurrentUser() {
   const tok = typeof window !== "undefined" ? window.localStorage.getItem("access_token") : null;
   if (!tok) return null;
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/auth/me`,
-      { headers: { Authorization: `Bearer ${tok}` } },
-    );
+    const res = await fetch(`${BACKEND_BASE}/auth/me`, {
+      headers: { Authorization: `Bearer ${tok}` },
+    });
     if (!res.ok) return null;
     const j = await res.json();
     return j?.user ?? null;
