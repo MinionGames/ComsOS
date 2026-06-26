@@ -31,7 +31,7 @@ async def generate_cards_from_text(
 
     try:
         raw = await claude.complete(prompt, max_tokens=4096, model=model)
-    except ClaudeServiceError as e:
+    except ClaudeServiceError:
         raise
 
     if not isinstance(raw, str):

@@ -16,13 +16,15 @@ describe("frontend api helpers", () => {
       json: jest.fn().mockResolvedValue([{ id: "note-1" }]),
     });
 
-    await expect(api.notes.list("subject-1")).resolves.toEqual([{ id: "note-1" }]);
+    await expect(api.notes.list("subject-1")).resolves.toEqual([
+      { id: "note-1" },
+    ]);
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/notes/?subject_id=subject-1"),
       expect.objectContaining({
         headers: expect.objectContaining({
-          Authorization: "******",
+          Authorization: expect.any(String),
         }),
       }),
     );

@@ -19,7 +19,9 @@ def test_review_updates_state_and_card():
     card = Card(card_id="card-1", beta=0.4, c=0.1)
     state = UserCardState(S=1.0, last_review_time=10.0)
 
-    result = model.review(user, card, state, "biology", actual_score=1.0, now_hours=34.0)
+    result = model.review(
+        user, card, state, "biology", actual_score=1.0, now_hours=34.0
+    )
 
     assert result["S"] >= model.config.S_min
     assert user.theta["biology"] > 0

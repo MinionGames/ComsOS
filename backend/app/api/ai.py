@@ -124,7 +124,7 @@ async def generate_cards(
                 deck_data = getattr(deck_res, "data", None) or None
                 if deck_data and len(deck_data) > 0:
                     deck_id = deck_data[0].get("id")
-            except Exception as e:
+            except Exception:
                 logger.exception("Failed to create deck row")
                 # continue without deck_id if deck creation fails
 

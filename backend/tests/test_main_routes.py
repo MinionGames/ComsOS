@@ -33,7 +33,9 @@ class _SupabaseStub:
 
 
 def test_notes_router_uses_crud_handler(monkeypatch):
-    monkeypatch.setattr(notes, "supabase", _SupabaseStub([{"id": "note-1", "title": "Exam notes"}]))
+    monkeypatch.setattr(
+        notes, "supabase", _SupabaseStub([{"id": "note-1", "title": "Exam notes"}])
+    )
     app.dependency_overrides[notes.get_current_user] = lambda: "user-1"
 
     with TestClient(app) as client:

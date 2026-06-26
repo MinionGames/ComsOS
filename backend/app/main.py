@@ -18,7 +18,9 @@ logger = logging.getLogger("uvicorn.error")
 def on_startup():
     key = (settings.anthropic_api_key or "").strip()
     if not key:
-        logger.error("ANTHROPIC_API_KEY is not configured in environment; aborting startup")
+        logger.error(
+            "ANTHROPIC_API_KEY is not configured in environment; aborting startup"
+        )
         # fail fast so the service does not run without credentials
         raise RuntimeError("ANTHROPIC_API_KEY is not configured in environment")
 
@@ -33,6 +35,7 @@ def on_startup():
         app.state.start_time = time.time()
     except Exception:
         logger.exception("Failed to set start_time on app.state")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -72,7 +75,11 @@ def health():
     try:
         key = settings.anthropic_api_key or ""
         has_key = bool(key and key.strip())
-        masked = (key[:6] + "..." + key[-6:]) if has_key and len(key) > 12 else ("(set)" if has_key else "(not set)")
+        masked = (
+            (key[:6] + "..." + key[-6:])
+            if has_key and len(key) > 12
+            else ("(set)" if has_key else "(not set)")
+        )
     except Exception:
         has_key = False
         masked = "(error)"
