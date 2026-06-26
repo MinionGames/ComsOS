@@ -23,11 +23,15 @@ async function fetchJson(path: string, init: RequestInit) {
   return { ok: res.ok, status: res.status, body };
 }
 
-export async function signUpWithEmail(email: string, password: string) {
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  name?: string,
+) {
   const r = await fetchJson("/auth/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, name }),
   });
   if (!r.ok) return { error: { message: r.body?.detail || r.body || "Signup failed" } };
   // Backend returns a message; keep shape compatible with client expectations
