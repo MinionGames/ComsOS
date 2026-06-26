@@ -3,3 +3,7 @@ pydantic-settings
 httpx
 fastapi
 uvicorn[standard]
+supabase
+python-multipart
+PyMuPDF
+numpy
