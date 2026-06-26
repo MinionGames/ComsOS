@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useUser } from "../../lib/UserContext";
 import Link from "next/link";
 import { api } from "../../lib/api";
 
-const StudyModePage = () => {
+const StudyModePageContent = () => {
   const { user, loading } = useUser();
   const searchParams = useSearchParams();
   const [isDark, setIsDark] = useState(false);
@@ -395,4 +395,10 @@ const StudyModePage = () => {
   );
 };
 
-export default StudyModePage;
+export default function StudyModePage() {
+  return (
+    <Suspense fallback={null}>
+      <StudyModePageContent />
+    </Suspense>
+  );
+}
