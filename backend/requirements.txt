@@ -1,3 +1,5 @@
 anthropic
 pydantic-settings
 httpx
+fastapi
+uvicorn[standard]
