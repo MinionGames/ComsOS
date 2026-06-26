@@ -7,6 +7,7 @@ from app.api import ai as ai_api
 from app.api import decks as decks_api
 from app.api import cards as cards_api
 from app.config import settings
+from app.middleware.rate_limit import InMemoryRateLimitMiddleware, RateLimitConfig
 import logging
 
 app = FastAPI(title="ComsOS API")
@@ -49,6 +50,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.add_middleware(
+    InMemoryRateLimitMiddleware,
+    config=RateLimitConfig(
+        enabled=settings.rate_limit_enabled,
+        max_requests=settings.rate_limit_requests,
+        window_seconds=settings.rate_limit_window_seconds,
+    ),
 )
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])

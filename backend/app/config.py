@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     anthropic_default_model: str = Field(
         "claude-haiku-4-5-20251001", env="ANTHROPIC_DEFAULT_MODEL"
     )
+    rate_limit_enabled: bool = Field(True, env="RATE_LIMIT_ENABLED")
+    rate_limit_requests: int = Field(120, env="RATE_LIMIT_REQUESTS")
+    rate_limit_window_seconds: int = Field(60, env="RATE_LIMIT_WINDOW_SECONDS")
 
     # Allow additional tuning vars in backend/.env (preferred) or repo .env
     model_config = {"extra": "ignore", "env_file": str(ROOT_ENV)}
