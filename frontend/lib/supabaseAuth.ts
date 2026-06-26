@@ -60,8 +60,15 @@ export async function signInWithEmail(email: string, password: string) {
 }
 
 export async function signOut() {
+  const tok =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem("access_token")
+      : null;
   try {
-    await fetchJson("/auth/logout", { method: "POST" });
+    await fetchJson("/auth/logout", {
+      method: "POST",
+      headers: tok ? { Authorization: `Bearer ${tok}` } : undefined,
+    });
   } catch (e) {
     // ignore
   }

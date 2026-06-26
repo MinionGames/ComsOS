@@ -1,10 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
-from jose import jwt
 from ..config import settings
 from ..db.client import supabase, supabase_anon
 import httpx
-import warnings
 import traceback
 import os
 from urllib.parse import urlparse
@@ -19,61 +17,71 @@ class AuthRequest(BaseModel):
     name: Optional[str] = None
 
 
+def _is_missing_profiles_table_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "profiles" in msg and (
+        "404" in msg
+        or "could not find" in msg
+        or "relation" in msg
+        or "does not exist" in msg
+    )
+
+
 async def get_current_user(authorization: str = Header(None)):
-    # Expect header like: "Bearer <access_token>". Be tolerant of variants.
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
+
     raw = authorization.strip()
     parts = raw.split()
-    # If header is like 'Bearer <token>' take last part, otherwise use raw
     token = parts[-1] if len(parts) >= 2 else raw
-    # First, try to extract the `sub` claim without verifying signature.
-    # This is helpful in development when Supabase issues ES256 tokens while
-    # local verification may expect HS256. We still attempt a proper verify
-    # if `JWT_SECRET` is configured, but fall back to the unverified `sub`.
+
+    publishable = (
+        settings.supabase_anon_key
+        or os.getenv("SUPABASE_PUBLISHABLE_KEY")
+        or os.getenv("SUPABASE_ANON_KEY")
+    )
+    if not publishable:
+        raise HTTPException(
+            status_code=500,
+            detail="Missing SUPABASE_PUBLISHABLE_KEY (or SUPABASE_ANON_KEY) in environment",
+        )
+
+    url = settings.supabase_url.rstrip("/") + "/auth/v1/user"
+    headers = {
+        "apikey": publishable,
+        "Authorization": f"Bearer {token}",
+    }
+
     try:
-        # Manually parse JWT payload without verifying signature to avoid
-        # library-specific behavior. This extracts the middle segment,
-        # base64url-decodes it and loads JSON.
-        parts = token.split(".")
-        if len(parts) < 2:
-            raise ValueError("Invalid JWT format")
-        import base64
-        import json
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(url, headers=headers)
+    except httpx.RequestError as e:
+        host = urlparse(settings.supabase_url).hostname or settings.supabase_url
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"Unable to reach Supabase host '{host}'. "
+                "Verify SUPABASE_URL and network/DNS connectivity. "
+                f"Original error: {e}"
+            ),
+        )
 
-        b = parts[1]
-        # pad base64 string
-        rem = len(b) % 4
-        if rem > 0:
-            b += "=" * (4 - rem)
-        decoded = base64.urlsafe_b64decode(b.encode("utf-8"))
-        payload = json.loads(decoded)
-        user_id = payload.get("sub")
-    except Exception as e:
-        print(f"Auth debug: failed to decode token (unverified): {str(e)[:200]}")
+    if r.status_code in (401, 403):
         raise HTTPException(status_code=401, detail="Invalid token")
-    # Attempt to verify the signature with local secret if provided.
-    if settings.jwt_secret:
+    if r.status_code >= 400:
+        detail = r.text
         try:
-            verified = jwt.decode(
-                token,
-                settings.jwt_secret,
-                algorithms=["HS256"],
-                options={"verify_aud": False},
-            )
-            verified_sub = verified.get("sub")
-            if verified_sub:
-                print(
-                    "Auth debug: token verified with local secret; sub=", verified_sub
-                )
-                return verified_sub
-        except Exception as e:
-            warnings.warn(
-                "Token signature verification failed; using unverified token (dev only): "
-                + str(e)
-            )
+            ej = r.json()
+            if isinstance(ej, dict):
+                detail = ej.get("msg") or ej.get("message") or detail
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=f"Supabase auth failed: {detail}")
 
-    print("Auth debug: returning user_id from token sub", user_id)
+    user = r.json() if r.text else {}
+    user_id = user.get("id") if isinstance(user, dict) else None
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
     return user_id
 
 
@@ -259,24 +267,40 @@ async def me(user_id: str = Depends(get_current_user)):
             profile = None
         return {"user": {"id": user_id}, "profile": profile}
     except Exception as e:
+        # Do not fail auth when the optional profiles table is absent.
+        if _is_missing_profiles_table_error(e):
+            return {"user": {"id": user_id}, "profile": None}
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/logout")
-async def logout(authorization: str = Header(...)):
-    # Expect header like: "Bearer <access_token>"
-    # Extract token if needed in the future; currently not used
-    _ = authorization.replace("Bearer ", "")
-    # Try to sign out via Supabase client if available; otherwise return OK
+async def logout(authorization: Optional[str] = Header(None)):
+    if not authorization:
+        return {"ok": True}
+
+    raw = authorization.strip()
+    parts = raw.split()
+    token = parts[-1] if len(parts) >= 2 else raw
+
+    publishable = (
+        settings.supabase_anon_key
+        or os.getenv("SUPABASE_PUBLISHABLE_KEY")
+        or os.getenv("SUPABASE_ANON_KEY")
+    )
+    if not publishable:
+        return {"ok": True}
+
+    url = settings.supabase_url.rstrip("/") + "/auth/v1/logout"
+    headers = {
+        "apikey": publishable,
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
     try:
-        # supabase-py may support sign_out; call it if present
-        sign_out_fn = getattr(supabase.auth, "sign_out", None)
-        if callable(sign_out_fn):
-            try:
-                sign_out_fn()
-            except Exception:
-                # ignore
-                pass
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            await client.post(url, headers=headers)
     except Exception:
         pass
+
     return {"ok": True}

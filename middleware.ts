@@ -2,17 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function middleware(req: NextRequest) {
-  const sessionToken =
-    req.cookies.get("next-auth.session-token") ||
-    req.cookies.get("__Secure-next-auth.session-token");
-
-  if (!sessionToken) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/api/auth/signin";
-    url.searchParams.set("callbackUrl", req.nextUrl.pathname);
-    return NextResponse.redirect(url);
-  }
-
+  // NextAuth middleware has been disabled.
+  // Supabase auth is handled by the frontend/backend auth flow.
   return NextResponse.next();
 }
 
