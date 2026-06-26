@@ -36,12 +36,15 @@ def on_startup():
 
 app.add_middleware(
     CORSMiddleware,
-    # broadened dev origins to include 127.0.0.1 and common dev ports
+    # Local dev may run Next.js on localhost, 127.0.0.1, or a LAN IP.
+    # Keep explicit localhost origins and allow private-network origins via regex.
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3001",
+        "http://127.0.0.1:3001",
     ],
+    allow_origin_regex=r"^http://(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
