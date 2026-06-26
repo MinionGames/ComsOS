@@ -2,12 +2,10 @@
 # A custom SRS algorithm inspired by human memory research,
 # designed for optimal long-term retention and personalized scheduling.
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 import math
 import time
 import numpy as np
-from app.services.anthropic_service import claude, ClaudeServiceError
-import os
 
 # =========================
 # Utility Functions

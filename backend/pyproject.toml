@@ -1,0 +1,12 @@
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+include = "\\.pyi?$"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+extend-exclude = ["venv", ".venv"]
+
+[tool.ruff.lint]
+extend-ignore = ["E203"]

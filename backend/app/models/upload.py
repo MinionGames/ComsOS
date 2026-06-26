@@ -24,6 +24,7 @@ async def upload_file(
         file_bytes = await file.read()
         # sanitize filename for storage key
         import re
+
         safe_filename = re.sub(r"[^A-Za-z0-9._-]", "_", file.filename)
 
         # normalize subject_id: allow callers to pass 'null' or 'none' when no subject

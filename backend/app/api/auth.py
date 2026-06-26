@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
 from ..config import settings
-from ..db.client import supabase, supabase_anon
+from ..db.client import supabase
 import httpx
 import traceback
 import os
@@ -27,8 +27,8 @@ def _is_missing_profiles_table_error(exc: Exception) -> bool:
     )
 
 
-async def get_current_user(authorization: str = Header(None)):
-    if not authorization:
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    if not isinstance(authorization, str) or not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
 
     raw = authorization.strip()
@@ -88,7 +88,11 @@ async def get_current_user(authorization: str = Header(None)):
 @router.post("/signup")
 async def signup(body: AuthRequest):
     try:
-        publishable = settings.supabase_anon_key or os.getenv("SUPABASE_PUBLISHABLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+        publishable = (
+            settings.supabase_anon_key
+            or os.getenv("SUPABASE_PUBLISHABLE_KEY")
+            or os.getenv("SUPABASE_ANON_KEY")
+        )
         if not publishable:
             raise HTTPException(
                 status_code=500,
@@ -120,7 +124,11 @@ async def signup(body: AuthRequest):
                 if isinstance(ej, dict):
                     msg = ej.get("msg") or ej.get("message") or ""
                     err_code = ej.get("error_code") or ""
-                    if status == 429 or "rate limit" in msg.lower() or "rate_limit" in err_code.lower():
+                    if (
+                        status == 429
+                        or "rate limit" in msg.lower()
+                        or "rate_limit" in err_code.lower()
+                    ):
                         status = 429
                     detail = msg or detail
             except Exception:
@@ -128,6 +136,7 @@ async def signup(body: AuthRequest):
             raise HTTPException(status_code=status, detail=detail)
 
         j = r.json()
+
         class _Res:
             pass
 
@@ -141,9 +150,15 @@ async def signup(body: AuthRequest):
     if not getattr(res, "user", None):
         raise HTTPException(status_code=400, detail="Signup failed")
 
-    user_id = res.user.get("id") if isinstance(res.user, dict) else getattr(res.user, "id", None)
+    user_id = (
+        res.user.get("id")
+        if isinstance(res.user, dict)
+        else getattr(res.user, "id", None)
+    )
     if not user_id:
-        raise HTTPException(status_code=502, detail="Supabase signup response missing user id")
+        raise HTTPException(
+            status_code=502, detail="Supabase signup response missing user id"
+        )
 
     # Best-effort profile row creation. Do not block signup on profile insert race/duplicates.
     profile_payload = {
@@ -166,7 +181,11 @@ async def login(body: AuthRequest):
     # publishable/anon key. This avoids library paths that may attempt to
     # use legacy/service keys for auth and trigger "Legacy API keys are disabled".
     try:
-        publishable = settings.supabase_anon_key or os.getenv("SUPABASE_PUBLISHABLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+        publishable = (
+            settings.supabase_anon_key
+            or os.getenv("SUPABASE_PUBLISHABLE_KEY")
+            or os.getenv("SUPABASE_ANON_KEY")
+        )
         if not publishable:
             raise HTTPException(
                 status_code=500,
@@ -189,9 +208,16 @@ async def login(body: AuthRequest):
             "Authorization": f"Bearer {publishable}",
             "Content-Type": "application/json",
         }
-        print("Auth request using publishable key (masked)", publishable[:8] + "..." + publishable[-6:])
+        print(
+            "Auth request using publishable key (masked)",
+            publishable[:8] + "..." + publishable[-6:],
+        )
         async with httpx.AsyncClient(timeout=15.0) as client:
-            r = await client.post(url, json={"email": body.email, "password": body.password}, headers=headers)
+            r = await client.post(
+                url,
+                json={"email": body.email, "password": body.password},
+                headers=headers,
+            )
         if r.status_code >= 400:
             detail = r.text
             status = 401
@@ -200,13 +226,18 @@ async def login(body: AuthRequest):
                 if isinstance(ej, dict):
                     msg = ej.get("msg") or ej.get("message") or ""
                     err_code = ej.get("error_code") or ""
-                    if r.status_code == 429 or "rate limit" in msg.lower() or "rate_limit" in err_code.lower():
+                    if (
+                        r.status_code == 429
+                        or "rate limit" in msg.lower()
+                        or "rate_limit" in err_code.lower()
+                    ):
                         status = 429
                     detail = msg or detail
             except Exception:
                 pass
             raise HTTPException(status_code=status, detail=detail)
         j = r.json()
+
         # j contains access_token, refresh_token, user, etc.
         class _Res:
             pass
@@ -238,14 +269,20 @@ async def login(body: AuthRequest):
     if res.user is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    user_id = res.user.get("id") if isinstance(res.user, dict) else getattr(res.user, "id", None)
+    user_id = (
+        res.user.get("id")
+        if isinstance(res.user, dict)
+        else getattr(res.user, "id", None)
+    )
     user_email = (
         res.user.get("email")
         if isinstance(res.user, dict)
         else getattr(res.user, "email", None)
     )
     if not user_id:
-        raise HTTPException(status_code=502, detail="Supabase login response missing user id")
+        raise HTTPException(
+            status_code=502, detail="Supabase login response missing user id"
+        )
 
     return {
         "access_token": res.session.access_token,

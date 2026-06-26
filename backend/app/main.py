@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 import time
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, subjects, notes, uploads
+from app.api import auth, subjects, notes, uploads, cmm_service
 from app.api.debug import router as debug_router
 from app.api import ai as ai_api
 from app.api import decks as decks_api
@@ -19,7 +19,9 @@ logger = logging.getLogger("uvicorn.error")
 def on_startup():
     key = (settings.anthropic_api_key or "").strip()
     if not key:
-        logger.error("ANTHROPIC_API_KEY is not configured in environment; aborting startup")
+        logger.error(
+            "ANTHROPIC_API_KEY is not configured in environment; aborting startup"
+        )
         # fail fast so the service does not run without credentials
         raise RuntimeError("ANTHROPIC_API_KEY is not configured in environment")
 
@@ -34,6 +36,7 @@ def on_startup():
         app.state.start_time = time.time()
     except Exception:
         logger.exception("Failed to set start_time on app.state")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,6 +70,7 @@ app.include_router(notes.router, prefix="/notes", tags=["notes"])
 app.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
 app.include_router(decks_api.router, prefix="/decks", tags=["decks"])
 app.include_router(cards_api.router, prefix="/cards", tags=["cards"])
+app.include_router(cmm_service.router, tags=["cmm"])
 
 app.include_router(debug_router, prefix="/debug", tags=["debug"])
 app.include_router(ai_api.router, prefix="/ai", tags=["ai"])
@@ -81,7 +85,11 @@ def health():
     try:
         key = settings.anthropic_api_key or ""
         has_key = bool(key and key.strip())
-        masked = (key[:6] + "..." + key[-6:]) if has_key and len(key) > 12 else ("(set)" if has_key else "(not set)")
+        masked = (
+            (key[:6] + "..." + key[-6:])
+            if has_key and len(key) > 12
+            else ("(set)" if has_key else "(not set)")
+        )
     except Exception:
         has_key = False
         masked = "(error)"

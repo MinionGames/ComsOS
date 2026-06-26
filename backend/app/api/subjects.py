@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from .auth import get_current_user
 from ..db.client import supabase
 from pydantic import BaseModel
