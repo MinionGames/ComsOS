@@ -118,7 +118,6 @@ export default function ResourcesPage() {
         onNavigate as EventListener,
       );
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, pathname]);
 
   // Load a signed URL when modal opens for private preview
@@ -160,7 +159,6 @@ export default function ResourcesPage() {
         onNavigate as EventListener,
       );
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editModalOpen, editingFile]);
 
   // detect prefers-color-scheme and keep in state
@@ -635,12 +633,19 @@ export default function ResourcesPage() {
                             break;
                           } catch (e: any) {
                             lastErr = e;
-                            console.warn(`AI generation attempt ${attempt} failed:`, e?.message || e);
+                            console.warn(
+                              `AI generation attempt ${attempt} failed:`,
+                              e?.message || e,
+                            );
                             // if this was the last attempt, rethrow below; otherwise wait before retrying
                             if (attempt < maxAttempts) {
-                              setGenerationMessage(`Attempt ${attempt} failed — retrying...`);
+                              setGenerationMessage(
+                                `Attempt ${attempt} failed — retrying...`,
+                              );
                               // exponential backoff small delay
-                              await new Promise((r) => setTimeout(r, 800 * attempt));
+                              await new Promise((r) =>
+                                setTimeout(r, 800 * attempt),
+                              );
                               continue;
                             }
                           }
@@ -648,7 +653,9 @@ export default function ResourcesPage() {
                         if (lastErr) throw lastErr;
                         console.log("Generated cards:", res);
                         setGenerationState("success");
-                        setGenerationMessage(`Generated ${res.cards?.length || 0} cards.`);
+                        setGenerationMessage(
+                          `Generated ${res.cards?.length || 0} cards.`,
+                        );
                         // refresh listing after generation
                         await fetchFiles();
                         // auto-hide success after short delay
@@ -657,7 +664,9 @@ export default function ResourcesPage() {
                         console.error(err);
                         setGenerationState("error");
                         // err.message should now be friendly (api.ts parses JSON detail)
-                        setGenerationMessage(err && err.message ? err.message : String(err));
+                        setGenerationMessage(
+                          err && err.message ? err.message : String(err),
+                        );
                         setTimeout(() => setGenerationState("idle"), 6000);
                       }
                     }}

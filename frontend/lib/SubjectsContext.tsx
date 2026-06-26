@@ -203,7 +203,6 @@ export const SubjectsProvider = ({
         onNavigate as EventListener,
       );
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, userLoading, pathname]);
 
   // Add to context value for use in UI

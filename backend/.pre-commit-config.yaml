@@ -1,0 +1,26 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/(app|tests)/.*\.py$
+  - repo: https://github.com/psf/black
+    rev: 26.5.1
+    hooks:
+      - id: black
+        files: ^backend/(app|tests)/.*\.py$
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        args: [--config=backend/.flake8]
+        files: ^backend/(app|tests)/.*\.py$
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: pytest backend/tests
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

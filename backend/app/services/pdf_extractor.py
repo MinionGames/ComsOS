@@ -1,5 +1,5 @@
 import fitz  # PyMuPDF
-import io
+
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     doc = fitz.open(stream=file_bytes, filetype="pdf")
@@ -10,6 +10,7 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
             pages.append(text.strip())
     doc.close()
     return "\n\n---\n\n".join(pages)  # page separator for chunking later
+
 
 def extract_text_from_bytes(file_bytes: bytes, filename: str) -> str:
     ext = filename.lower().split(".")[-1]
