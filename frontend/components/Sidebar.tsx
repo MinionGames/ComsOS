@@ -146,6 +146,17 @@ export default function Sidebar() {
         {/* Subject list with color dots */}
         <SidebarSubjectsList />
       </div>
+      <div
+        style={{
+          padding: "10px 18px 14px 18px",
+          fontSize: "0.8rem",
+          color: "rgba(255,255,255,0.65)",
+          borderTop: "1px solid #2c3e50",
+          letterSpacing: 0.3,
+        }}
+      >
+        Version alpha
+      </div>
     </aside>
   );
 }
