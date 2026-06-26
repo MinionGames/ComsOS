@@ -1,15 +1,16 @@
 // filepath: /c:/Users/leyan/Documents/GitHub/ComsOS/frontend/app/api/auth/[...nextauth]/route.ts
-import NextAuth from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
+import { NextResponse } from "next/server";
 
-const handler = NextAuth({
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-  ],
-  secret: process.env.NEXTAUTH_SECRET,
-});
+// Google/NextAuth has been intentionally disabled.
+// All auth must go through Supabase + backend /auth endpoints.
+async function disabled() {
+  return NextResponse.json(
+    {
+      error: "NextAuth is disabled",
+      detail: "Use Supabase auth via /auth/login and /auth/signup instead.",
+    },
+    { status: 410 },
+  );
+}
 
-export { handler as GET, handler as POST };
+export { disabled as GET, disabled as POST };

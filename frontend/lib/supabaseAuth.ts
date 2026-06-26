@@ -4,7 +4,13 @@ const BACKEND_BASE =
   (process.env.NEXT_PUBLIC_API_URL as string) || "http://localhost:8000";
 
 async function fetchJson(path: string, init: RequestInit) {
-  const res = await fetch(`${BACKEND_BASE}${path}`, init);
+  let res: Response;
+  try {
+    res = await fetch(`${BACKEND_BASE}${path}`, init);
+  } catch (e) {
+    // Network error — backend is unreachable (not running, wrong URL, or CORS preflight failed)
+    return { ok: false, status: 0, body: { detail: "Cannot reach the server. Please ensure the backend is running." } };
+  }
   let body: any = null;
   try {
     body = await res.json();
@@ -14,11 +20,15 @@ async function fetchJson(path: string, init: RequestInit) {
   return { ok: res.ok, status: res.status, body };
 }
 
-export async function signUpWithEmail(email: string, password: string) {
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  name?: string,
+) {
   const r = await fetchJson("/auth/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, name }),
   });
   if (!r.ok) return { error: { message: r.body?.detail || r.body || "Signup failed" } };
   // Backend returns a message; keep shape compatible with client expectations
@@ -50,8 +60,15 @@ export async function signInWithEmail(email: string, password: string) {
 }
 
 export async function signOut() {
+  const tok =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem("access_token")
+      : null;
   try {
-    await fetchJson("/auth/logout", { method: "POST" });
+    await fetchJson("/auth/logout", {
+      method: "POST",
+      headers: tok ? { Authorization: `Bearer ${tok}` } : undefined,
+    });
   } catch (e) {
     // ignore
   }

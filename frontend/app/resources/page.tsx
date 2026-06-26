@@ -616,17 +616,39 @@ export default function ResourcesPage() {
                         const txt = editingFile.content || "";
                         setGenerationState("in-progress");
                         setGenerationMessage(null);
-                        const res = await api.ai.generateCards(
-                          txt,
-                          editingFile.subject_id || undefined,
-                          editingTitle || editingFile.name || undefined,
-                          editingFile.id,
-                        );
+                        // Retry loop for transient AI generation failures
+                        const maxAttempts = 3;
+                        let attempt = 0;
+                        let lastErr: any = null;
+                        let res: any = null;
+                        while (attempt < maxAttempts) {
+                          attempt += 1;
+                          try {
+                            res = await api.ai.generateCards(
+                              txt,
+                              editingFile.subject_id || undefined,
+                              editingTitle || editingFile.name || undefined,
+                              editingFile.id,
+                            );
+                            // success — break the retry loop
+                            lastErr = null;
+                            break;
+                          } catch (e: any) {
+                            lastErr = e;
+                            console.warn(`AI generation attempt ${attempt} failed:`, e?.message || e);
+                            // if this was the last attempt, rethrow below; otherwise wait before retrying
+                            if (attempt < maxAttempts) {
+                              setGenerationMessage(`Attempt ${attempt} failed — retrying...`);
+                              // exponential backoff small delay
+                              await new Promise((r) => setTimeout(r, 800 * attempt));
+                              continue;
+                            }
+                          }
+                        }
+                        if (lastErr) throw lastErr;
                         console.log("Generated cards:", res);
                         setGenerationState("success");
-                        setGenerationMessage(
-                          `Generated ${res.cards?.length || 0} cards.`,
-                        );
+                        setGenerationMessage(`Generated ${res.cards?.length || 0} cards.`);
                         // refresh listing after generation
                         await fetchFiles();
                         // auto-hide success after short delay
@@ -634,10 +656,9 @@ export default function ResourcesPage() {
                       } catch (err: any) {
                         console.error(err);
                         setGenerationState("error");
-                        setGenerationMessage(
-                          err && err.message ? err.message : String(err),
-                        );
-                        setTimeout(() => setGenerationState("idle"), 4000);
+                        // err.message should now be friendly (api.ts parses JSON detail)
+                        setGenerationMessage(err && err.message ? err.message : String(err));
+                        setTimeout(() => setGenerationState("idle"), 6000);
                       }
                     }}
                     style={{

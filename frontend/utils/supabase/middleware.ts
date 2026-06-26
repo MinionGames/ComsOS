@@ -2,7 +2,9 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { type NextRequest, type NextResponse } from "next/server";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseKey =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const createClient = (request: NextRequest, response?: NextResponse) => {
   let token: string | undefined = undefined;
