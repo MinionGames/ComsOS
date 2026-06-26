@@ -63,11 +63,3 @@ async def update_note(
         raise HTTPException(
             status_code=404, detail="Note not found or not owned by user"
         )
-
-
-router = APIRouter()
-
-
-@router.get("/", summary="List notes")
-def list_notes():
-    return {"notes": []}

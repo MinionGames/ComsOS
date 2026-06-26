@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+
+cd frontend || exit 1
+npm exec lint-staged
+
+cd .. || exit 1
+python_files=$(git diff --cached --name-only --diff-filter=ACMR -- backend | grep '\.py$' || true)
+
+if [ -n "$python_files" ]; then
+  python -m pre_commit run --config backend/.pre-commit-config.yaml --files $python_files
+fi
