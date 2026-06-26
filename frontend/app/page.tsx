@@ -4,7 +4,6 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "../lib/UserContext";
-import styles from "./page.module.css";
 
 const Page = () => {
   const router = useRouter();

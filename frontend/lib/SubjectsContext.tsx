@@ -19,7 +19,7 @@ interface SubjectsContextType {
   setSubjects: React.Dispatch<React.SetStateAction<Subject[]>>;
   loadingSubjects: boolean;
   setLoadingSubjects: React.Dispatch<React.SetStateAction<boolean>>;
-  reloadSubjects: (userId: string, supabase: any) => Promise<void>;
+  reloadSubjects: (userId: string) => Promise<void>;
   focusReloadNeeded: boolean;
   setFocusReloadNeeded: React.Dispatch<React.SetStateAction<boolean>>;
 }

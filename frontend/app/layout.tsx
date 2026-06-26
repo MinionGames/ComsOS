@@ -25,25 +25,14 @@ export default function RootLayout({
       <head>
         <title>ComsOS</title>
       </head>
-      <body style={{ margin: 0, padding: 0, overflowX: "hidden" }}>
+      <body className="m-0 overflow-x-hidden">
         <UserProvider>
           <SubjectsProvider>
             <Navbar />
             <Sidebar />
             <LoadingOverlay />
             <main
-              style={{
-                marginTop: "56px",
-                marginLeft: "220px",
-                minHeight: "100vh",
-                backgroundColor: "var(--main-bg, #f5f7fb)",
-                color: "var(--text-color, #121212)",
-                padding: "20px",
-                boxSizing: "border-box",
-                width: "calc(100% - 220px)",
-                maxWidth: "1200px",
-                transition: "margin-left 0.2s, width 0.2s",
-              }}
+              className="mt-14 ml-[220px] min-h-screen w-[calc(100%-220px)] max-w-[1200px] box-border bg-[var(--main-bg,#f5f7fb)] p-5 text-[var(--text-color,#121212)] transition-[margin-left,width] duration-200"
             >
               {children}
             </main>
