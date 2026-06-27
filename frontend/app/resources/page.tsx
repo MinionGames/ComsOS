@@ -5,7 +5,6 @@ import Link from "next/link";
 import React, { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { api } from "../../lib/api";
-import { useSubjects } from "../../lib/SubjectsContext";
 
 export default function ResourcesPage() {
   const { user, loading } = useUser();
@@ -19,7 +18,6 @@ export default function ResourcesPage() {
   const [editingFile, setEditingFile] = useState<any>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingSubject, setEditingSubject] = useState("");
-  const { subjects } = useSubjects();
   const pathname = usePathname();
   const [editingSignedUrl, setEditingSignedUrl] = useState<string | null>(null);
   const [editingSignedUrlError, setEditingSignedUrlError] = useState<
@@ -751,11 +749,6 @@ export default function ResourcesPage() {
                     }}
                   >
                     <option value="">(None)</option>
-                    {(subjects || []).map((s: any) => (
-                      <option key={s.id} value={s.id}>
-                        {s.title}
-                      </option>
-                    ))}
                   </select>
                 </div>
 

@@ -15,7 +15,6 @@ export default function DecksPage() {
   const CACHE_KEY = "comsos:decks";
   const [viewerName, setViewerName] = useState("");
   const [viewerSubject, setViewerSubject] = useState("");
-  const [subjectsList, setSubjectsList] = useState<any[]>([]);
 
   // Load cached decks immediately on mount so returning users see something instantly
   useEffect(() => {
@@ -105,23 +104,6 @@ export default function DecksPage() {
       setViewerSubject("");
     }
   }, [viewerDeck]);
-
-  // fetch user's subjects for the dropdown
-  useEffect(() => {
-    let mounted = true;
-    async function loadSubjects() {
-      try {
-        const subs = await api.subjects.list();
-        if (mounted) setSubjectsList(Array.isArray(subs) ? subs : []);
-      } catch (e) {
-        // ignore
-      }
-    }
-    loadSubjects();
-    return () => {
-      mounted = false;
-    };
-  }, [user]);
 
   function formatDate(dateStr: string) {
     if (!dateStr) return "";
@@ -311,11 +293,6 @@ export default function DecksPage() {
                   }}
                 >
                   <option value="">None</option>
-                  {subjectsList.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.title}
-                    </option>
-                  ))}
                 </select>
               </div>
               <div>
