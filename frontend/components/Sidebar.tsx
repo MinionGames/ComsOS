@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { useUser } from "../lib/UserContext";
-import { SidebarSubjectsList } from "./SidebarSubjectsList";
 
 const navLinkStyle = {
   color: "#fff",
@@ -75,19 +74,6 @@ export default function Sidebar() {
           Dashboard
         </Link>
         <Link
-          href="/subjects"
-          style={navLinkStyle}
-          onClick={() =>
-            window.dispatchEvent(
-              new CustomEvent("comsos:navigate", {
-                detail: { pathname: "/subjects" },
-              }),
-            )
-          }
-        >
-          Subjects
-        </Link>
-        <Link
           href="/decks"
           style={navLinkStyle}
           onClick={() =>
@@ -123,29 +109,6 @@ export default function Sidebar() {
           Settings
         </Link>
       </nav>
-      <div
-        style={{
-          padding: "24px 18px 12px 18px",
-          fontWeight: 700,
-          fontSize: "1.1rem",
-          letterSpacing: 1,
-          marginTop: 24,
-          borderTop: "1px solid #2c3e50",
-        }}
-      >
-        Subjects
-      </div>
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          maxHeight: "calc(100vh - 420px)",
-          padding: "0 12px 0 12px",
-        }}
-      >
-        {/* Subject list with color dots */}
-        <SidebarSubjectsList />
-      </div>
       <div
         style={{
           padding: "10px 18px 14px 18px",
