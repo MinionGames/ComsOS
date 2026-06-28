@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 import time
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, notes, uploads, cmm_service
+from app.api import auth, notes, uploads, cmm_service, concept_graph
 from app.api.debug import router as debug_router
 from app.api import ai as ai_api
 from app.api import cards as cards_api
@@ -67,6 +67,10 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(notes.router, prefix="/notes", tags=["notes"])
 app.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
 app.include_router(cards_api.router, prefix="/cards", tags=["cards"])
+app.include_router(concept_graph.concepts_router, prefix="/concepts", tags=["concepts"])
+app.include_router(
+    concept_graph.relationships_router, prefix="/relationships", tags=["relationships"]
+)
 app.include_router(cmm_service.router, tags=["cmm"])
 
 app.include_router(debug_router, prefix="/debug", tags=["debug"])
