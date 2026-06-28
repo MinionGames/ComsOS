@@ -1,3 +1,4 @@
+// ----------DEPRECATED Effective 6/27/2026----------
 "use client";
 import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";

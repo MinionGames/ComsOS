@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth, notes, uploads, cmm_service
 from app.api.debug import router as debug_router
 from app.api import ai as ai_api
-from app.api import decks as decks_api
 from app.api import cards as cards_api
 from app.config import settings
 from app.middleware.rate_limit import InMemoryRateLimitMiddleware, RateLimitConfig
@@ -67,7 +66,6 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(notes.router, prefix="/notes", tags=["notes"])
 app.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
-app.include_router(decks_api.router, prefix="/decks", tags=["decks"])
 app.include_router(cards_api.router, prefix="/cards", tags=["cards"])
 app.include_router(cmm_service.router, tags=["cmm"])
 
