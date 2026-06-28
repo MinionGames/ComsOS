@@ -17,6 +17,40 @@ class AuthRequest(BaseModel):
     name: Optional[str] = None
 
 
+def _ensure_profile_row(user_id: str, email: Optional[str] = None) -> None:
+    """Best-effort profile upsert for users authenticated via Supabase auth."""
+    try:
+        existing = (
+            supabase.table("profiles")
+            .select("id,email")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(existing, "data", None) or []
+        if rows:
+            # If row exists but email is missing, try to backfill it.
+            if email and not rows[0].get("email"):
+                try:
+                    (
+                        supabase.table("profiles")
+                        .update({"email": email})
+                        .eq("id", user_id)
+                        .execute()
+                    )
+                except Exception:
+                    pass
+            return
+
+        payload = {"id": user_id}
+        if email:
+            payload["email"] = email
+        supabase.table("profiles").insert(payload).execute()
+    except Exception:
+        # Profiles are optional for auth endpoints; never block login/signup.
+        pass
+
+
 def _is_missing_profiles_table_error(exc: Exception) -> bool:
     msg = str(exc).lower()
     return "profiles" in msg and (
@@ -114,6 +148,8 @@ async def signup(body: AuthRequest):
             "Content-Type": "application/json",
         }
         payload = {"email": body.email, "password": body.password}
+        if body.name:
+            payload["data"] = {"name": body.name}
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.post(url, json=payload, headers=headers)
         if r.status_code >= 400:
@@ -141,7 +177,13 @@ async def signup(body: AuthRequest):
             pass
 
         res = _Res()
-        res.user = j.get("user")
+        # Supabase can return either {"user": {...}} or user fields at the top level.
+        if isinstance(j, dict) and isinstance(j.get("user"), dict):
+            res.user = j.get("user")
+        elif isinstance(j, dict) and j.get("id"):
+            res.user = j
+        else:
+            res.user = None
     except HTTPException:
         raise
     except Exception as e:
@@ -160,17 +202,7 @@ async def signup(body: AuthRequest):
             status_code=502, detail="Supabase signup response missing user id"
         )
 
-    # Best-effort profile row creation. Do not block signup on profile insert race/duplicates.
-    profile_payload = {
-        "id": user_id,
-        "email": body.email,
-    }
-    if body.name:
-        profile_payload["name"] = body.name
-    try:
-        supabase.table("profiles").insert(profile_payload).execute()
-    except Exception:
-        pass
+    _ensure_profile_row(user_id, body.email)
 
     return {"message": "Check your email to confirm your account"}
 
@@ -283,6 +315,8 @@ async def login(body: AuthRequest):
         raise HTTPException(
             status_code=502, detail="Supabase login response missing user id"
         )
+
+    _ensure_profile_row(user_id, user_email)
 
     return {
         "access_token": res.session.access_token,

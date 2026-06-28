@@ -121,14 +121,18 @@ export const SubjectsProvider = ({
     mountedRef.current = true;
 
     if (user && user.id) {
-      // defer fetches to avoid competing auth localStorage lock in StrictMode
-      const t = window.setTimeout(() => {
-        if (!mountedRef.current) return;
-        reloadSubjects(user.id);
-      }, 0);
-      // cleanup timer if unmounting
-      // store timer id on ref so we can clear in return
-      (mountedRef as any).timer = t;
+      const shouldLoadForRoute =
+        pathname?.startsWith("/subjects") || pathname?.startsWith("/resources");
+      if (shouldLoadForRoute) {
+        // defer fetches to avoid competing auth localStorage lock in StrictMode
+        const t = window.setTimeout(() => {
+          if (!mountedRef.current) return;
+          reloadSubjects(user.id);
+        }, 0);
+        // cleanup timer if unmounting
+        // store timer id on ref so we can clear in return
+        (mountedRef as any).timer = t;
+      }
     } else if (!userLoading) {
       // only clear subjects when auth is settled and there's no user
       setSubjects([]);
@@ -148,12 +152,17 @@ export const SubjectsProvider = ({
     }
 
     function onFocus() {
-      if (user && user.id) {
+      if (user && user.id && pathname?.startsWith("/subjects")) {
         schedule(() => reloadSubjects(user.id).catch(() => {}));
       }
     }
     function onVisibility() {
-      if (document.visibilityState === "visible" && user && user.id) {
+      if (
+        document.visibilityState === "visible" &&
+        user &&
+        user.id &&
+        pathname?.startsWith("/subjects")
+      ) {
         schedule(() => reloadSubjects(user.id).catch(() => {}));
       }
     }
@@ -176,7 +185,7 @@ export const SubjectsProvider = ({
         if (!p) return;
         // Only reload subjects and related caches when navigating to the Subjects page itself.
         // Other pages (decks/resources) have their own listeners and will fetch their own data.
-        if (p.startsWith("/subjects")) {
+        if (p.startsWith("/subjects") || p.startsWith("/resources")) {
           if (user && user.id) {
             schedule(() => reloadSubjects(user.id).catch(() => {}));
           }

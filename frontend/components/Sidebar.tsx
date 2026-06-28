@@ -74,19 +74,6 @@ export default function Sidebar() {
           Dashboard
         </Link>
         <Link
-          href="/decks"
-          style={navLinkStyle}
-          onClick={() =>
-            window.dispatchEvent(
-              new CustomEvent("comsos:navigate", {
-                detail: { pathname: "/decks" },
-              }),
-            )
-          }
-        >
-          Decks
-        </Link>
-        <Link
           href="/resources"
           style={navLinkStyle}
           onClick={() =>
@@ -98,12 +85,6 @@ export default function Sidebar() {
           }
         >
           Resources
-        </Link>
-        <Link href="/study-mode" style={navLinkStyle}>
-          Study Mode
-        </Link>
-        <Link href="/planner" style={navLinkStyle}>
-          Planner
         </Link>
         <Link href="/settings" style={navLinkStyle}>
           Settings

@@ -9,6 +9,21 @@ import uuid
 router = APIRouter()
 
 
+def _ensure_profile_row(user_id: str) -> None:
+    """Best-effort profile row creation to satisfy uploads.user_id FK."""
+    try:
+        existing = (
+            supabase.table("profiles").select("id").eq("id", user_id).limit(1).execute()
+        )
+        rows = getattr(existing, "data", None) or []
+        if rows:
+            return
+        supabase.table("profiles").insert({"id": user_id}).execute()
+    except Exception:
+        # Do not fail uploads here; the final insert will still surface a clear DB error.
+        pass
+
+
 @router.post("/{subject_id}")
 async def upload_file(
     subject_id: str,
@@ -76,6 +91,8 @@ async def upload_file(
             "processed": processed,
             "metadata": {},
         }
+
+        _ensure_profile_row(user_id)
 
         res = supabase.table("uploads").insert(record).execute()
 

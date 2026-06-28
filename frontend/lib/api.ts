@@ -127,18 +127,18 @@ export const api = {
       }),
     delete: (id: string) => apiFetch(`/subjects/${id}`, { method: "DELETE" }),
   },
+    decks: {
+      list: () => apiFetch("/decks/"),
+      counts: () => apiFetch("/decks/counts"),
+      update: (deckId: string, updates: any) =>
+        apiFetch(`/decks/${deckId}`, {
+          method: "PATCH",
+          body: JSON.stringify(updates),
+        }),
+    },
   cards: {
     list: () => cachedApiFetch("/cards/", {}, 2000),
     counts: () => cachedApiFetch("/cards/counts", {}, 2000),
-  },
-  decks: {
-    list: () => cachedApiFetch("/decks/", {}, 2000),
-    counts: () => cachedApiFetch("/decks/counts", {}, 2000),
-    update: (id: string, updates: any) =>
-      apiFetch(`/decks/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(updates),
-      }),
   },
   notes: {
     list: (subjectId: string) => apiFetch(`/notes/?subject_id=${subjectId}`),

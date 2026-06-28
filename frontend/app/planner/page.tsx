@@ -1,3 +1,4 @@
+// ----------DEPRECATED Effective 6/27/2026----------
 "use client";
 
 import { useUser } from "../../lib/UserContext";
