@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -23,6 +24,13 @@ class PackageNotFoundError(PackageError):
 
 class PackageValidationError(PackageError):
     """Raised when a package graph is invalid."""
+
+
+@dataclass(frozen=True, slots=True)
+class PackageSeedReport:
+    package_count: int
+    concept_count: int
+    relationship_count: int
 
 
 def _extract_data(response: Any) -> list[dict[str, Any]]:
@@ -316,10 +324,24 @@ def seedPackage(slug: str) -> dict[str, Any]:
             }
         )
 
+    deduped_relationship_payloads = []
+    seen_relationships: set[tuple[str, str, str, str]] = set()
+    for payload in relationship_payloads:
+        key = (
+            str(payload["package_id"]),
+            str(payload["source_concept_id"]),
+            str(payload["target_concept_id"]),
+            str(payload["relationship_type"]),
+        )
+        if key in seen_relationships:
+            continue
+        seen_relationships.add(key)
+        deduped_relationship_payloads.append(payload)
+
     relationship_result = (
         supabase.table("concept_relationships")
         .upsert(
-            relationship_payloads,
+            deduped_relationship_payloads,
             on_conflict="package_id,source_concept_id,target_concept_id,relationship_type",
         )
         .execute()
@@ -330,3 +352,43 @@ def seedPackage(slug: str) -> dict[str, Any]:
         "concepts": concept_rows,
         "relationships": _extract_data(relationship_result),
     }
+
+
+def generateSeedReport(slug: str) -> PackageSeedReport:
+    package_row = getPackageBySlug(slug)
+    package_id = package_row["id"]
+
+    concept_rows = _extract_data(
+        supabase.table("concepts").select("id").eq("package_id", package_id).execute()
+    )
+    relationship_rows = _extract_data(
+        supabase.table("concept_relationships")
+        .select("id")
+        .eq("package_id", package_id)
+        .execute()
+    )
+
+    return PackageSeedReport(
+        package_count=1,
+        concept_count=len(concept_rows),
+        relationship_count=len(relationship_rows),
+    )
+
+
+def seedPackageInfrastructure(slug: str) -> dict[str, Any]:
+    result = seedPackage(slug)
+    report = generateSeedReport(slug)
+    return {
+        "package": result["package"],
+        "concepts": result["concepts"],
+        "relationships": result["relationships"],
+        "report": {
+            "package_count": report.package_count,
+            "concept_count": report.concept_count,
+            "relationship_count": report.relationship_count,
+        },
+    }
+
+
+def seedSATPackageInfrastructure() -> dict[str, Any]:
+    return seedPackageInfrastructure("sat")

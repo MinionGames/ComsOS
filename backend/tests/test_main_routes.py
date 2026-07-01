@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from app.api import cmm_service, notes, questions
+from app.api import admin, cmm_service, notes, questions
 from app.main import app
 
 
@@ -81,3 +81,54 @@ def test_questions_routes_are_mounted(monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == [{"id": "question-1"}]
+
+
+def test_admin_observability_route_is_mounted(monkeypatch):
+    class _Query:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def select(self, *_args, **_kwargs):
+            return self
+
+        def eq(self, *_args, **_kwargs):
+            return self
+
+        def limit(self, *_args, **_kwargs):
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=self._rows)
+
+    class _Supabase:
+        def table(self, name):
+            if name == "packages":
+                return _Query([{"id": "pkg-1", "slug": "sat", "name": "SAT"}])
+            if name == "concepts":
+                return _Query(
+                    [
+                        {"id": "c-1", "slug": "linear-functions", "name": "Linear Functions", "package_id": "pkg-1"},
+                        {"id": "c-2", "slug": "systems", "name": "Systems", "package_id": "pkg-1"},
+                    ]
+                )
+            if name == "concept_relationships":
+                return _Query(
+                    [
+                        {"id": "r-1", "source_concept_id": "c-1", "target_concept_id": "c-2", "package_id": "pkg-1"}
+                    ]
+                )
+            if name == "questions":
+                return _Query([{"id": "q-1", "package_id": "pkg-1"}])
+            raise AssertionError(f"Unexpected table: {name}")
+
+    monkeypatch.setattr(admin, "supabase", _Supabase())
+    monkeypatch.setattr(admin, "getPackageGraphBySlug", lambda _slug: None)
+    app.dependency_overrides[admin.require_internal_admin] = lambda: "user-1"
+
+    with TestClient(app) as client:
+        response = client.get("/admin/observability?package_slug=sat")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["counts"]["package_count"] == 1

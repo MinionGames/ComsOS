@@ -86,6 +86,10 @@ const SettingsPage = () => {
         Manage your account and workspace settings here.
       </p>
 
+      <section style={{ marginTop: "16px" }}>
+        <Link href="/settings/admin">Internal Admin Dashboard</Link>
+      </section>
+
       <section style={{ marginTop: "24px", maxWidth: "600px" }}>
         <h2 style={{ marginBottom: "12px" }}>Clock Settings</h2>
         <label

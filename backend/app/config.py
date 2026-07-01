@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = Field(True, env="RATE_LIMIT_ENABLED")
     rate_limit_requests: int = Field(120, env="RATE_LIMIT_REQUESTS")
     rate_limit_window_seconds: int = Field(60, env="RATE_LIMIT_WINDOW_SECONDS")
+    internal_admin_emails: str = Field("", env="INTERNAL_ADMIN_EMAILS")
 
     # Allow additional tuning vars in backend/.env (preferred) or repo .env
     model_config = {"extra": "ignore", "env_file": str(ROOT_ENV)}

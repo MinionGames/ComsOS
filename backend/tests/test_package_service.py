@@ -7,8 +7,10 @@ from app.services.package_service import (
     countConcepts,
     countRelationships,
     detectCycles,
+    generateSeedReport,
     loadPackage,
     seedPackage,
+    seedSATPackageInfrastructure,
     validatePackageGraph,
 )
 
@@ -155,3 +157,30 @@ def test_seed_package_is_idempotent(monkeypatch):
     assert len(stub.tables["packages"].rows) == 1
     assert len(stub.tables["concepts"].rows) == 68
     assert len(stub.tables["concept_relationships"].rows) == 106
+
+
+def test_seed_report_counts(monkeypatch):
+    stub = _SupabaseStub()
+    monkeypatch.setattr("app.services.package_service.supabase", stub)
+
+    seedPackage("sat")
+    report = generateSeedReport("sat")
+
+    assert report.package_count == 1
+    assert report.concept_count == 68
+    assert report.relationship_count == 106
+
+
+def test_seed_sat_infrastructure_returns_report(monkeypatch):
+    stub = _SupabaseStub()
+    monkeypatch.setattr("app.services.package_service.supabase", stub)
+
+    first = seedSATPackageInfrastructure()
+    second = seedSATPackageInfrastructure()
+
+    assert first["report"]["package_count"] == 1
+    assert second["report"]["package_count"] == 1
+    assert first["report"]["concept_count"] == 68
+    assert second["report"]["concept_count"] == 68
+    assert first["report"]["relationship_count"] == 106
+    assert second["report"]["relationship_count"] == 106

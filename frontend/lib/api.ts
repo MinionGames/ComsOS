@@ -14,6 +14,37 @@ import type {
   QuestionUpdateInput,
 } from "./questionTypes";
 
+export interface AdminTopConnectedConcept {
+  concept_id: string;
+  slug: string | null;
+  name: string | null;
+  incoming: number;
+  outgoing: number;
+  total: number;
+}
+
+export interface AdminObservabilitySnapshot {
+  scope: {
+    package_slug: string | null;
+    package: {
+      id: string;
+      slug: string;
+      name: string;
+    } | null;
+  };
+  counts: {
+    package_count: number;
+    concept_count: number;
+    relationship_count: number;
+    question_count: number;
+  };
+  graph_validation: {
+    valid: boolean | null;
+    error: string | null;
+  };
+  top_connected_concepts: AdminTopConnectedConcept[];
+}
+
 async function apiFetch(path: string, options: RequestInit = {}) {
   const token = localStorage.getItem("access_token");
   const res = await fetch(`${BASE}${path}`, {
@@ -214,6 +245,15 @@ export const api = {
       conceptId: string,
     ): Promise<QuestionByConceptAssociation[]> =>
       apiFetch(`/questions/by-concept/${conceptId}`),
+  },
+  admin: {
+    observability: (
+      packageSlug = "sat",
+      topN = 10,
+    ): Promise<AdminObservabilitySnapshot> =>
+      apiFetch(
+        `/admin/observability?package_slug=${encodeURIComponent(packageSlug)}&top_n=${encodeURIComponent(String(topN))}`,
+      ),
   },
   ai: {
     generateCards: (
