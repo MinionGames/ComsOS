@@ -4,6 +4,15 @@ const BASE =
     ? "http://localhost:8000"
     : "https://api.comsos.legatusaisolutions.com");
 import { supabase } from "./supabaseClient";
+import type {
+  QuestionByConceptAssociation,
+  QuestionConceptAssociation,
+  QuestionConceptWeightInput,
+  QuestionCreateInput,
+  QuestionDetail,
+  QuestionRecord,
+  QuestionUpdateInput,
+} from "./questionTypes";
 
 async function apiFetch(path: string, options: RequestInit = {}) {
   const token = localStorage.getItem("access_token");
@@ -152,6 +161,59 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ content }),
       }),
+  },
+  questions: {
+    list: (packageSlug?: string): Promise<QuestionRecord[]> =>
+      apiFetch(
+        `/questions/${packageSlug ? `?package_slug=${encodeURIComponent(packageSlug)}` : ""}`,
+      ),
+    create: (payload: QuestionCreateInput): Promise<QuestionDetail> =>
+      apiFetch("/questions/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    get: (questionId: string): Promise<QuestionDetail> =>
+      apiFetch(`/questions/${questionId}`),
+    update: (
+      questionId: string,
+      updates: QuestionUpdateInput,
+    ): Promise<QuestionDetail> =>
+      apiFetch(`/questions/${questionId}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      }),
+    delete: (questionId: string) =>
+      apiFetch(`/questions/${questionId}`, { method: "DELETE" }),
+    concepts: (questionId: string): Promise<QuestionConceptAssociation[]> =>
+      apiFetch(`/questions/${questionId}/concepts`),
+    setConcepts: (
+      questionId: string,
+      concepts: QuestionConceptWeightInput[],
+    ): Promise<QuestionConceptAssociation[]> =>
+      apiFetch(`/questions/${questionId}/concepts`, {
+        method: "PUT",
+        body: JSON.stringify(concepts),
+      }),
+    addConcept: (
+      questionId: string,
+      conceptId: string,
+      weight = 1,
+    ): Promise<QuestionConceptAssociation[]> =>
+      apiFetch(`/questions/${questionId}/concepts`, {
+        method: "POST",
+        body: JSON.stringify({ concept_id: conceptId, weight }),
+      }),
+    removeConcept: (
+      questionId: string,
+      conceptId: string,
+    ): Promise<QuestionConceptAssociation[]> =>
+      apiFetch(`/questions/${questionId}/concepts/${conceptId}`, {
+        method: "DELETE",
+      }),
+    byConcept: (
+      conceptId: string,
+    ): Promise<QuestionByConceptAssociation[]> =>
+      apiFetch(`/questions/by-concept/${conceptId}`),
   },
   ai: {
     generateCards: (

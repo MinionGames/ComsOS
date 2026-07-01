@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from app.api import cmm_service, notes
+from app.api import cmm_service, notes, questions
 from app.main import app
 
 
@@ -66,3 +66,18 @@ def test_cmm_routes_are_mounted():
 
     assert response.status_code == 200
     assert 0.0 <= response.json()["predicted"] <= 1.0
+
+
+def test_questions_routes_are_mounted(monkeypatch):
+    monkeypatch.setattr(
+        questions, "list_questions", lambda **_kwargs: [{"id": "question-1"}]
+    )
+    app.dependency_overrides[questions.get_current_user] = lambda: "user-1"
+
+    with TestClient(app) as client:
+        response = client.get("/questions/?package_slug=sat")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == [{"id": "question-1"}]

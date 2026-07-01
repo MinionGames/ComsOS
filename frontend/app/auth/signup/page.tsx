@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { signUpWithEmail } from "../../../lib/supabaseAuth";
+import { signUpWithEmail, signInWithGoogle } from "../../../lib/supabaseAuth";
 
 export default function Signup() {
   const [email, setEmail] = useState("");
@@ -9,6 +9,7 @@ export default function Signup() {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const router = useRouter();
 
@@ -33,6 +34,17 @@ export default function Signup() {
     } else {
       setSuccess("Check your email for a confirmation link.");
       setTimeout(() => router.push("/auth/login"), 2000);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError("");
+    setGoogleLoading(true);
+    const res = await signInWithGoogle();
+    const err = (res as any).error;
+    if (err) {
+      setGoogleLoading(false);
+      setError(err.message || String(err));
     }
   };
 
@@ -154,6 +166,28 @@ export default function Signup() {
             <div style={{ color: "green", marginTop: 8 }}>{success}</div>
           )}
         </form>
+        <div style={{ marginTop: 10 }}>
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={googleLoading}
+            style={{
+              width: "100%",
+              padding: 12,
+              background: "#ffffff",
+              color: "#1f1f1f",
+              border: "1px solid #d9d9d9",
+              borderRadius: 6,
+              fontWeight: 600,
+              fontSize: 15,
+              cursor: googleLoading ? "not-allowed" : "pointer",
+              opacity: googleLoading ? 0.7 : 1,
+              fontFamily: "'Roboto', sans-serif",
+            }}
+          >
+            {googleLoading ? "Redirecting..." : "Continue with Google"}
+          </button>
+        </div>
         <div style={{ marginTop: 16, textAlign: "center" }}>
           Already have an account?{" "}
           <a

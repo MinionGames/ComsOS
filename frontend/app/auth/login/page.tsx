@@ -1,14 +1,17 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithEmail } from "../../../lib/supabaseAuth";
+import { useSearchParams } from "next/navigation";
+import { signInWithEmail, signInWithGoogle } from "../../../lib/supabaseAuth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("comsos-theme");
@@ -20,6 +23,13 @@ export default function Login() {
       setTheme("light");
     }
   }, []);
+
+  useEffect(() => {
+    const oauthError = searchParams.get("error");
+    if (oauthError) {
+      setError(oauthError);
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +50,17 @@ export default function Login() {
       }
     }
     router.push("/dashboard");
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError("");
+    setGoogleLoading(true);
+    const res = await signInWithGoogle();
+    const err = (res as any).error;
+    if (err) {
+      setGoogleLoading(false);
+      setError(err.message || String(err));
+    }
   };
 
   const bgColor = theme === "dark" ? "#111720" : "#f5f7fb";
@@ -139,6 +160,28 @@ export default function Login() {
           </button>
           {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
         </form>
+        <div style={{ marginTop: 10 }}>
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={googleLoading}
+            style={{
+              width: "100%",
+              padding: 12,
+              background: "#ffffff",
+              color: "#1f1f1f",
+              border: "1px solid #d9d9d9",
+              borderRadius: 6,
+              fontWeight: 600,
+              fontSize: 15,
+              cursor: googleLoading ? "not-allowed" : "pointer",
+              opacity: googleLoading ? 0.7 : 1,
+              fontFamily: "'Roboto', sans-serif",
+            }}
+          >
+            {googleLoading ? "Redirecting..." : "Continue with Google"}
+          </button>
+        </div>
         <div style={{ marginTop: 16, textAlign: "center" }}>
           Don't have an account?{" "}
           <a

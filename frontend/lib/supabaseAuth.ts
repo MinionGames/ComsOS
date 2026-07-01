@@ -6,6 +6,23 @@ const BACKEND_BASE =
     ? "http://localhost:8000"
     : "https://api.comsos.legatusaisolutions.com");
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string | undefined;
+const SUPABASE_PUBLISHABLE_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+
+function resolveSiteUrl() {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+  return (process.env.NEXT_PUBLIC_SITE_URL as string) || "http://localhost:3000";
+}
+
+function getGoogleCallbackUrl() {
+  const explicit = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URL as string | undefined;
+  if (explicit && explicit.trim().length > 0) return explicit.trim();
+  return `${resolveSiteUrl().replace(/\/$/, "")}/auth/callback`;
+}
+
 async function fetchJson(path: string, init: RequestInit) {
   let res: Response;
   try {
@@ -80,6 +97,88 @@ export async function signOut() {
     if (typeof fn === "function") await fn();
   } catch (e) {}
   return { ok: true };
+}
+
+export async function signInWithGoogle() {
+  if (!SUPABASE_URL) {
+    return {
+      error: {
+        message:
+          "Missing NEXT_PUBLIC_SUPABASE_URL. Add it to frontend/.env.local.",
+      },
+    };
+  }
+  if (!SUPABASE_PUBLISHABLE_KEY) {
+    return {
+      error: {
+        message:
+          "Missing NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY. Add it to frontend/.env.local.",
+      },
+    };
+  }
+
+  try {
+    const authUrl = new URL(`${SUPABASE_URL.replace(/\/$/, "")}/auth/v1/authorize`);
+    authUrl.searchParams.set("provider", "google");
+    authUrl.searchParams.set("redirect_to", getGoogleCallbackUrl());
+    authUrl.searchParams.set("response_type", "token");
+
+    if (typeof window !== "undefined") {
+      window.location.assign(authUrl.toString());
+    }
+
+    return { data: { redirect: true } };
+  } catch (e: any) {
+    return {
+      error: {
+        message: e?.message || "Failed to start Google sign-in.",
+      },
+    };
+  }
+}
+
+export function completeOAuthFromCurrentUrl() {
+  if (typeof window === "undefined") {
+    return { error: { message: "OAuth callback can only run in the browser." } };
+  }
+
+  const hash = window.location.hash?.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const hashParams = new URLSearchParams(hash || "");
+  const queryParams = new URLSearchParams(window.location.search || "");
+
+  const oauthError = hashParams.get("error") || queryParams.get("error");
+  if (oauthError) {
+    return {
+      error: {
+        message:
+          hashParams.get("error_description") ||
+          queryParams.get("error_description") ||
+          oauthError,
+      },
+    };
+  }
+
+  const accessToken =
+    hashParams.get("access_token") || queryParams.get("access_token");
+  if (!accessToken) {
+    return { error: { message: "No access token found in OAuth callback." } };
+  }
+
+  try {
+    window.localStorage.setItem("access_token", accessToken);
+  } catch (e) {
+    return { error: { message: "Unable to save access token in localStorage." } };
+  }
+
+  try {
+    window.dispatchEvent(new CustomEvent("comsos:login"));
+  } catch (e) {
+    // non-fatal
+  }
+
+  return { data: { access_token: accessToken } };
 }
 
 export async function getCurrentUser() {

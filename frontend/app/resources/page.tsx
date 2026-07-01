@@ -23,6 +23,7 @@ export default function ResourcesPage() {
   const [editingSignedUrlError, setEditingSignedUrlError] = useState<
     string | null
   >(null);
+  const [filesLoading, setFilesLoading] = useState(true);
   const [isDark, setIsDark] = useState<boolean>(false);
   const [extractedOpen, setExtractedOpen] = useState<boolean>(false);
   const [generationState, setGenerationState] = useState<
@@ -77,6 +78,7 @@ export default function ResourcesPage() {
       if (showSpinner) setFiles([]);
     } finally {
       isFetchingRef.current = false;
+      setFilesLoading(false);
     }
   }
 
@@ -88,7 +90,10 @@ export default function ResourcesPage() {
         if (user && user.id)
           raw = localStorage.getItem(`comsos:uploads:${user.id}`);
         if (!raw) raw = localStorage.getItem(`comsos:uploads`);
-        if (raw) setFiles(JSON.parse(raw));
+        if (raw) {
+          setFiles(JSON.parse(raw));
+          setFilesLoading(false);
+        }
       }
     } catch (e) {}
 
@@ -434,7 +439,46 @@ export default function ResourcesPage() {
         </div>
 
         <h3 style={{ marginTop: 20, marginBottom: 8 }}>Your Files</h3>
-        {files.length === 0 ? (
+        <style>{`
+          @keyframes shimmer {
+            0% { background-position: -600px 0; }
+            100% { background-position: 600px 0; }
+          }
+          .skeleton-line {
+            border-radius: 4px;
+            background: linear-gradient(90deg, #2c3e50 25%, #344a60 50%, #2c3e50 75%);
+            background-size: 600px 100%;
+            animation: shimmer 1.4s infinite linear;
+          }
+        `}</style>
+        {filesLoading && files.length === 0 ? (
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {[1, 2, 3].map((n) => (
+              <li
+                key={n}
+                style={{
+                  background: "#232946",
+                  borderRadius: 8,
+                  marginBottom: 16,
+                  padding: "14px 18px",
+                  boxShadow: "0 2px 8px 0 rgba(0,0,0,0.07)",
+                  border: "1px solid #2c3e50",
+                  maxWidth: 640,
+                  position: "relative",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div style={{ flex: 1, paddingRight: 80 }}>
+                    <div className="skeleton-line" style={{ height: 16, width: "60%", marginBottom: 10 }} />
+                    <div className="skeleton-line" style={{ height: 12, width: "35%" }} />
+                  </div>
+                  <div className="skeleton-line" style={{ width: 52, height: 28, borderRadius: 6, flexShrink: 0 }} />
+                </div>
+                <div className="skeleton-line" style={{ height: 12, width: "20%", marginTop: 14 }} />
+              </li>
+            ))}
+          </ul>
+        ) : files.length === 0 ? (
           <div style={{ color: "#aaa" }}>No files uploaded yet.</div>
         ) : (
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
