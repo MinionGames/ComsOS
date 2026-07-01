@@ -1,7 +1,16 @@
 from fastapi import FastAPI
 import time
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, notes, uploads, cmm_service, concept_graph, questions, admin
+from app.api import (
+    auth,
+    notes,
+    uploads,
+    cmm_service,
+    concept_graph,
+    questions,
+    admin,
+    waitlist,
+)
 from app.api.debug import router as debug_router
 from app.api import ai as ai_api
 from app.api import cards as cards_api
@@ -64,6 +73,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(waitlist.router, prefix="/waitlist", tags=["waitlist"])
 app.include_router(notes.router, prefix="/notes", tags=["notes"])
 app.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
 app.include_router(cards_api.router, prefix="/cards", tags=["cards"])

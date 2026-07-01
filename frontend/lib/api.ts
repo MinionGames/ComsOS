@@ -45,6 +45,16 @@ export interface AdminObservabilitySnapshot {
   top_connected_concepts: AdminTopConnectedConcept[];
 }
 
+export interface WaitlistJoinInput {
+  email: string;
+  current_sat_score?: number | null;
+  target_sat_score?: number | null;
+}
+
+export interface WaitlistJoinResponse {
+  message: string;
+}
+
 async function apiFetch(path: string, options: RequestInit = {}) {
   const token = localStorage.getItem("access_token");
   const res = await fetch(`${BASE}${path}`, {
@@ -151,6 +161,13 @@ export const api = {
       apiFetch("/auth/signup", {
         method: "POST",
         body: JSON.stringify({ email, password }),
+      }),
+  },
+  waitlist: {
+    join: (payload: WaitlistJoinInput): Promise<WaitlistJoinResponse> =>
+      apiFetch("/waitlist/", {
+        method: "POST",
+        body: JSON.stringify(payload),
       }),
   },
   subjects: {

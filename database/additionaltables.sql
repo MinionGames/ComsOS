@@ -258,7 +258,29 @@ score numeric,
 metadata jsonb default '{}'::jsonb,
 
 created_at timestamptz default now()
+
 );
+
+-- ==========================================
+-- Waitlist
+-- ==========================================
+
+create table if not exists public.waitlist (
+id uuid primary key default gen_random_uuid(),
+email text not null unique,
+current_sat_score int,
+target_sat_score int,
+created_at timestamptz not null default now(),
+constraint waitlist_current_sat_score_range check (
+	current_sat_score is null or (current_sat_score >= 400 and current_sat_score <= 1600)
+),
+constraint waitlist_target_sat_score_range check (
+	target_sat_score is null or (target_sat_score >= 400 and target_sat_score <= 1600)
+)
+);
+
+create index if not exists idx_waitlist_created_at
+on public.waitlist(created_at desc);
 
 create index if not exists idx_learning_events_user_id
 on public.learning_events(user_id);

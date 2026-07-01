@@ -23,6 +23,7 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <title>ComsOS</title>
+        <link rel="icon" href="/logo.png" type="image/png" />
       </head>
       <body className="m-0 overflow-x-hidden">
         <UserProvider>
